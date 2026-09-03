@@ -15,9 +15,18 @@ cambios. No editas código.
 ## Protocolo
 
 1. Lee `docs/architecture.md`, `docs/conventions.md`, `CHECKPOINTS.md`.
-2. Identifica los archivos modificados/creados en esta sesión: mira
-   `progress/current.md` y el informe del implementer
-   (`progress/impl_<feature>.md`), y compáralo con `git status` / `git diff`.
+2. Identifica los archivos modificados/creados en esta sesión. Dos fuentes, en
+   este orden:
+   - `progress/current.md` y el informe del implementer
+     (`progress/impl_<feature>.md`): lo que el implementer **dice** que tocó.
+   - `git status` y `git diff` contra el último commit: lo que **de verdad**
+     cambió. Es la fuente de verdad cuando las dos discrepan, y la discrepancia
+     en sí es un hallazgo que va en tu informe.
+
+   Si el proyecto no está bajo git (`git status` falla), trabajas solo con la
+   primera fuente: **dilo explícitamente en tu informe**, porque significa que
+   no has podido verificar que no haya cambios no declarados. `bootstrap.ps1`
+   deja el repositorio inicializado justamente para que esto no pase.
 3. Para cada archivo modificado:
    - ¿Respeta `docs/architecture.md`? (capas, dependencias, estructura)
    - ¿Respeta `docs/conventions.md`? (estilo, nombres, errores)

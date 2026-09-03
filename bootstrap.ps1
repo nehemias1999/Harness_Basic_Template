@@ -29,8 +29,18 @@
 .PARAMETER Force
     No pide confirmación al sobrescribir el historial de `progress/`.
 
+.PARAMETER ResetGit
+    Borra el `.git` heredado de la plantilla y empieza un historial nuevo.
+    Úsalo cuando hayas CLONADO el template: sin esto te quedas con sus commits.
+
+.PARAMETER NoGit
+    No toca git en absoluto. Para cuando gestionas el repositorio a mano.
+
 .EXAMPLE
     ./bootstrap.ps1 -Name "mi-proyecto" -WhatIf
+
+.EXAMPLE
+    ./bootstrap.ps1 -Name "mi-proyecto" -ResetGit
 
 .EXAMPLE
     ./bootstrap.ps1 -Name "mi-proyecto" -Description "Pipeline de ingesta diaria."
@@ -41,6 +51,10 @@
 .NOTES
     Exit codes: 0 instanciado · 1 faltan archivos de la plantilla.
     Después de ejecutarlo, valida con ./init.ps1 (debe quedar verde).
+
+    Sobre git: el reviewer identifica los archivos tocados en una sesión
+    comparando contra el historial, así que un proyecto sin repo lo deja
+    trabajando a ciegas. Este script deja el repositorio listo (ver sección 5).
 #>
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "Medium")]
 param(
@@ -50,7 +64,11 @@ param(
 
     [string]$Description = "",
 
-    [switch]$Force
+    [switch]$Force,
+
+    [switch]$ResetGit,
+
+    [switch]$NoGit
 )
 
 Set-Location -Path $PSScriptRoot
@@ -92,7 +110,9 @@ if (-not $py) {
 }
 
 if ($PSCmdlet.ShouldProcess("feature_list.json", "escribir project/description y vaciar features")) {
-    $rewrite = "import json,sys;p='feature_list.json';d=json.load(open(p,encoding='utf-8'));d['project']=sys.argv[1];d['description']=sys.argv[2] or d.get('description','');d['features']=[];open(p,'w',encoding='utf-8',newline=chr(10)).write(json.dumps(d,indent=2,ensure_ascii=False)+chr(10))"
+    # sys.argv[2] puede no llegar: PowerShell 5.1 descarta los argumentos vacíos
+    # al invocar un ejecutable nativo, así que -Description sin valor no viaja.
+    $rewrite = "import json,sys;p='feature_list.json';d=json.load(open(p,encoding='utf-8'));d['project']=sys.argv[1];d['description']=(sys.argv[2] if len(sys.argv)>2 else '') or d.get('description','');d['features']=[];open(p,'w',encoding='utf-8',newline=chr(10)).write(json.dumps(d,indent=2,ensure_ascii=False)+chr(10))"
     & $py -c $rewrite $Name $Description
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "No se pudo reescribir feature_list.json"
@@ -199,6 +219,67 @@ foreach ($report in $reports) {
     }
 }
 
+# 5. Repositorio git -------------------------------------------------------
+# Dos motivos para tocar esto aquí:
+#  - El reviewer identifica los archivos tocados en la sesión comparando contra
+#    el historial. Sin repo trabaja a ciegas.
+#  - Si clonaste el template, `origin` sigue apuntando a la plantilla y tu primer
+#    push mandaría el proyecto nuevo al repo del template.
+$gitNote = $null
+
+if ($NoGit) {
+    Write-Warn "git: omitido por -NoGit (recuerda que el reviewer compara contra el historial)"
+} elseif (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    Write-Warn "git no está instalado: el reviewer no podrá comparar contra el historial"
+} else {
+    $hasGit = Test-Path -LiteralPath ".git"
+
+    if ($hasGit -and $ResetGit) {
+        if ($PSCmdlet.ShouldProcess(".git", "borrar el historial heredado de la plantilla")) {
+            Remove-Item -LiteralPath ".git" -Recurse -Force
+            Write-Ok ".git heredado de la plantilla -> borrado"
+            $hasGit = $false
+        }
+    }
+
+    if (-not $hasGit) {
+        if ($PSCmdlet.ShouldProcess("el directorio actual", "inicializar un repositorio git")) {
+            git init --quiet
+            git add -A
+            # Identidad solo si el entorno no la tiene: no sobrescribimos la del usuario.
+            if (-not (git config user.email)) {
+                git config user.email "harness@localhost"
+                git config user.name "Harness bootstrap"
+                Write-Warn "git: no había identidad configurada, se puso una local provisional"
+            }
+            git commit --quiet -m "chore: instancia el arnés para $Name"
+            if ($LASTEXITCODE -eq 0) {
+                Write-Ok "git: repositorio inicializado con el commit base del arnés"
+            } else {
+                Write-Warn "git: el commit base falló; hazlo a mano antes de trabajar"
+            }
+        }
+    } else {
+        # Repo preexistente: lo que importa es que `origin` no apunte al template.
+        $origin = (git remote get-url origin 2>$null)
+        if ($origin -and $origin -match "Harness_Basic_Template") {
+            if ($PSCmdlet.ShouldProcess("remote origin", "desconectar el remote de la plantilla")) {
+                git remote remove origin
+                Write-Ok "git: remote 'origin' apuntaba a la PLANTILLA -> desconectado"
+                $gitNote = "Añade el remote de tu proyecto: git remote add origin <url>"
+            }
+        } elseif ($origin) {
+            Write-Ok "git: remote 'origin' -> $origin (no es la plantilla, se deja como está)"
+        } else {
+            Write-Ok "git: repositorio existente sin remote, nada que desconectar"
+        }
+
+        if ((git log --oneline -1 2>$null) -and -not $ResetGit) {
+            Write-Warn "git: conservas el historial de la plantilla. Usa -ResetGit si querías empezar de cero."
+        }
+    }
+}
+
 # Checklist final -----------------------------------------------------------
 Write-Host ""
 Write-Host "-- Siguiente paso (a mano) ----------------------------"
@@ -207,6 +288,9 @@ Write-Host "  2. Revisa docs/conventions.md y docs/verification.md."
 Write-Host "  3. Añade tus primeras features a feature_list.json (usa el bloque _example)."
 Write-Host "  4. Ejecuta ./init.ps1 — debe quedar verde."
 Write-Host "  5. Pide a Claude Code: <<implementa la siguiente feature pendiente>>."
+if ($gitNote) {
+    Write-Host "  6. $gitNote"
+}
 Write-Host ""
 Write-Ok "Proyecto '$Name' instanciado."
 

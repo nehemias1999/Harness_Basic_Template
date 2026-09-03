@@ -84,6 +84,8 @@ después de copiar el repo.
 | `-Name` | obligatorio; nombre del proyecto |
 | `-Description` | una línea; si se omite, deja el placeholder |
 | `-Force` | reinicia `progress/history.md` aunque tenga entradas |
+| `-ResetGit` | borra el `.git` heredado y empieza un historial nuevo |
+| `-NoGit` | no toca git en absoluto |
 | `-WhatIf` | lista los cambios sin aplicarlos |
 
 Qué toca: `feature_list.json` (nombre, descripción, `features: []`), los
@@ -98,6 +100,30 @@ destrozaría su propia documentación.
 Es idempotente: reejecutarlo con otro nombre solo reescribe el nombre. Protege el
 historial: si `progress/history.md` tiene entradas reales, avisa y no lo borra
 salvo `-Force`.
+
+### Lo que hace con git
+
+El reviewer identifica los archivos tocados en una sesión comparando contra el
+historial. Un proyecto sin repositorio lo deja trabajando a ciegas, con lo único
+que le queda: el informe del propio implementer, que es justo a quien tiene que
+auditar. Así que el script deja el repositorio en condiciones:
+
+| Situación de partida | Qué hace |
+|---|---|
+| Copiaste la plantilla (no hay `.git`) | `git init` + commit base `chore: instancia el arnés para <proyecto>` |
+| **Clonaste** la plantilla (hay `.git` con `origin` al template) | **desconecta `origin`** y avisa de que conservas el historial de la plantilla |
+| Clonaste y pasas `-ResetGit` | borra el `.git` heredado y arranca un historial limpio |
+| Repo propio con otro `origin` | lo deja como está |
+| `-NoGit` | nada, con un `[WARN]` |
+
+Lo de desconectar el `origin` no es cosmético: si clonas el template y no lo
+tocas, **tu primer `git push` manda el proyecto nuevo al repositorio de la
+plantilla**. Cuando lo desconecta, la checklist final añade un paso 6 con el
+`git remote add origin <url>` que te toca.
+
+Si git no tiene identidad configurada, pone una local provisional
+(`harness@localhost`) para poder cerrar el commit base, y lo avisa. Cámbiala por
+la tuya antes de empezar a trabajar en serio.
 
 **Qué NO hace:** rellenar `docs/architecture.md`. Ese archivo define qué es "un
 buen trabajo" en tu proyecto y es la referencia del reviewer — escribirlo es
