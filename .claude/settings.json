@@ -1,0 +1,40 @@
+{
+  "$schema_comment": "Hooks que automatizan la verificación del arnés. Los ejecuta Claude Code, no el agente, así que no se pueden saltar. Los comandos están en PowerShell porque este template es canónico en Windows; en WSL/Linux cambia 'powershell -File ./init.ps1' por './init.sh' y 'python' por 'python3'. Ver docs/scripts.md.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/harness_test_hook.ps1",
+            "description": "Tras editar o escribir archivos, corre los tests y muestra el resumen."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./init.ps1 -Quiet",
+            "description": "Antes de cerrar la sesión, fuerza la verificación completa del arnés."
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "PowerShell(./init.ps1*)",
+      "PowerShell(./bootstrap.ps1*)",
+      "PowerShell(./scripts/harness_test_hook.ps1*)",
+      "Bash(./init.sh)",
+      "Bash(python -m unittest*)",
+      "Bash(python3 -m unittest*)",
+      "Bash(python scripts/*)",
+      "Bash(python3 scripts/*)"
+    ]
+  }
+}

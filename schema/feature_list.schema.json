@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://example.invalid/harness/feature_list.schema.json",
+  "title": "feature_list",
+  "description": "Alcance del proyecto: la lista de features y su estado. init.ps1 / init.sh valida este archivo contra el schema en cada arranque.",
+  "type": "object",
+  "required": ["project", "rules", "features"],
+  "properties": {
+    "project": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "rules": {
+      "type": "object",
+      "required": ["one_feature_at_a_time", "require_tests_to_close", "valid_status"],
+      "properties": {
+        "one_feature_at_a_time": { "type": "boolean" },
+        "require_tests_to_close": { "type": "boolean" },
+        "valid_status": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      }
+    },
+    "_example": { "type": "object" },
+    "features": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/feature" }
+    }
+  },
+  "definitions": {
+    "feature": {
+      "type": "object",
+      "required": ["id", "name", "title", "description", "acceptance", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string", "pattern": "^[a-z0-9]+(_[a-z0-9]+)*$" },
+        "title": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "acceptance": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "status": { "enum": ["pending", "in_progress", "done", "blocked"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,179 @@
+# Scripts del arnés
+
+> La caja de herramientas del repositorio. Cada script lleva además su propia
+> cabecera de documentación (`Get-Help ./init.ps1` en PowerShell, o las primeras
+> líneas del archivo); aquí está el panorama y los detalles que no caben en una
+> cabecera.
+
+| Script | Quién lo ejecuta | Cuándo |
+|--------|------------------|--------|
+| `init.ps1` / `init.sh` | agente, hook `Stop`, reviewer | al arrancar la sesión y antes de todo `done` |
+| `bootstrap.ps1` | humano | una vez, al instanciar un proyecto nuevo desde la plantilla |
+| `scripts/validate_feature_list.py` | `init.*` (y a mano) | siempre que haya que comprobar el alcance |
+| `scripts/harness_test_hook.ps1` | hook `PostToolUse` | automático, tras cada Edit/Write |
+| `scripts/demo_orchestration.py` | humano o agente | para entender o demostrar el patrón anti-teléfono-descompuesto |
+
+---
+
+## `init.ps1` / `init.sh` — el verificador
+
+Son **el mismo verificador en dos plataformas**: misma estructura de 5 secciones,
+misma salida `[OK]/[WARN]/[FAIL]`, mismo exit code. Usa `init.ps1` en Windows y
+`init.sh` en WSL, macOS, Linux o CI. Si cambias uno, cambia el otro.
+
+```
+1. Entorno            intérprete de Python detectado y >= 3.9
+2. Archivos base      los 8 archivos sin los que el arnés no funciona
+3. feature_list.json  delega en scripts/validate_feature_list.py
+4. Tests              descubre y ejecuta tests/
+5. Resumen            veredicto + exit code
+```
+
+**Parámetros:** `init.sh` no tiene ninguno. `init.ps1` acepta `-Quiet` para
+resumir la salida de los tests.
+
+**Exit codes:** `0` entorno listo · `1` hay algo que resolver.
+Los `[WARN]` **no** bloquean; los `[FAIL]` sí.
+
+**Detalles que importan:**
+
+- **Detección de intérprete.** Prueba `python`, `py` y `python3`, y descarta los
+  que existen en el PATH pero no ejecutan nada — en Windows el alias `python3` de
+  la Microsoft Store es un stub que solo imprime un aviso de instalación. Por eso
+  el script no se fía de `command -v` / `Get-Command`: lanza una sonda real.
+- **0 tests es `[WARN]`, no `[OK]`.** `unittest discover` sobre una carpeta vacía
+  termina con éxito, así que un repo recién instanciado parecería verde sin haber
+  verificado nada. El verificador cuenta los tests antes de ejecutarlos y
+  distingue tres casos: *0 tests* (aviso), *tests en verde* (ok), *tests rotos*
+  (fallo). Cuando tu proyecto ya tiene código, un `[WARN]` aquí es una señal de
+  alarma, no ruido.
+
+**Cuando falla:**
+
+| Línea | Qué hacer |
+|-------|-----------|
+| `No se encontró un Python ejecutable` | instala Python >= 3.9 o arregla el PATH |
+| `Falta archivo base: X` | el arnés está incompleto: recupera `X` (ver `CHECKPOINTS.md` C1) |
+| `Hay N features en in_progress` | cierra o revierte las features de más: una a la vez |
+| `No se pudieron descubrir los tests` | hay un error de import en `tests/`; ejecuta el discover a mano para verlo |
+| `Hay tests rotos` | arréglalos antes de seguir; no marques nada `done` |
+
+---
+
+## `bootstrap.ps1` — instanciar un proyecto
+
+Convierte la plantilla en tu proyecto. Se ejecuta **una vez**, a mano, justo
+después de copiar el repo.
+
+```powershell
+./bootstrap.ps1 -Name "mi-proyecto" -WhatIf                       # ensayo en seco
+./bootstrap.ps1 -Name "mi-proyecto" -Description "Qué hace."      # de verdad
+./bootstrap.ps1 -Name "otro" -Force                               # reinicia también el historial
+```
+
+| Parámetro | Efecto |
+|-----------|--------|
+| `-Name` | obligatorio; nombre del proyecto |
+| `-Description` | una línea; si se omite, deja el placeholder |
+| `-Force` | reinicia `progress/history.md` aunque tenga entradas |
+| `-WhatIf` | lista los cambios sin aplicarlos |
+
+Qué toca: `feature_list.json` (nombre, descripción, `features: []`), los
+placeholders de `README.md` y de `docs/architecture.md`, `conventions.md` y
+`verification.md`, `progress/current.md`, `progress/history.md`, y borra informes
+residuales (`progress/explore_*.md`, `impl_*.md`, `review_*.md`).
+
+La lista de archivos con placeholders es explícita a propósito: este archivo y
+`CHECKPOINTS.md` *hablan* de los placeholders, así que sustituirlos aquí
+destrozaría su propia documentación.
+
+Es idempotente: reejecutarlo con otro nombre solo reescribe el nombre. Protege el
+historial: si `progress/history.md` tiene entradas reales, avisa y no lo borra
+salvo `-Force`.
+
+**Qué NO hace:** rellenar `docs/architecture.md`. Ese archivo define qué es "un
+buen trabajo" en tu proyecto y es la referencia del reviewer — escribirlo es
+trabajo tuyo, y el script te lo recuerda en su checklist final.
+
+Después de ejecutarlo, `./init.ps1` debe quedar verde (con `[WARN]` en tests,
+porque todavía no hay código).
+
+---
+
+## `scripts/validate_feature_list.py` — validar el alcance
+
+Comprueba `feature_list.json`: campos obligatorios, ids únicos, estados válidos,
+`acceptance` no vacío y **como mucho una feature `in_progress`** (la regla de "una
+feature a la vez" del arnés, hecha ejecutable).
+
+```bash
+python scripts/validate_feature_list.py                  # feature_list.json
+python scripts/validate_feature_list.py otro_archivo.json
+```
+
+Exit codes: `0` válido · `1` inválido. Imprime una línea `[FAIL]` por problema.
+
+Existe como módulo aparte a propósito: `init.ps1` e `init.sh` lo invocan los dos,
+así que las reglas del alcance no se pueden desincronizar entre Windows y POSIX.
+El formato completo está descrito en `schema/feature_list.schema.json`.
+
+---
+
+## `scripts/harness_test_hook.ps1` — feedback tras cada edición
+
+Lo invoca el hook `PostToolUse` de `.claude/settings.json`: cada vez que un
+agente escribe o edita un archivo, Claude Code ejecuta este script y le devuelve
+el resultado de los tests. No es opcional para el agente — lo dispara el arnés,
+no él.
+
+```powershell
+./scripts/harness_test_hook.ps1              # a mano, para probarlo
+./scripts/harness_test_hook.ps1 -TestsDir tests
+```
+
+Exit codes: `0` tests verdes **o** sin tests todavía · `1` tests rotos.
+
+Está en un archivo aparte y no en un one-liner dentro de `settings.json` por un
+motivo concreto: `unittest discover` sobre una carpeta sin tests sale con **exit
+code 1** ("NO TESTS RAN"), así que en un proyecto recién instanciado el hook
+fallaría en cada edición y el agente vería un error en cada paso. El script
+cuenta primero y solo falla cuando hay tests y están rotos.
+
+Es feedback rápido, **no** la verificación oficial: esa sigue siendo `init.ps1`,
+que además comprueba archivos base y alcance.
+
+---
+
+## `scripts/demo_orchestration.py` — el patrón, sin IA
+
+Demuestra la **regla anti-teléfono-descompuesto**: analiza cada módulo de `src/`,
+escribe el informe completo en `progress/explore_<modulo>.md` y devuelve por
+stdout **solo la referencia**:
+
+```
+done -> progress/explore_storage.md
+done -> progress/explore_cli.md
+```
+
+Eso es exactamente lo que hace un subagente real: el contenido vive en disco y
+por el canal de comunicación viaja una línea. Este script es la versión
+determinista y sin modelo del mismo patrón, útil para verlo funcionar sin gastar
+una sesión de agente.
+
+```bash
+python scripts/demo_orchestration.py
+python scripts/demo_orchestration.py --src src --out progress --dry-run
+```
+
+| Parámetro | Efecto |
+|-----------|--------|
+| `--src DIR` | carpeta a analizar (por defecto `src`) |
+| `--out DIR` | dónde escribir los informes (por defecto `progress`) |
+| `--dry-run` | lista las rutas sin escribir nada |
+
+Exit codes: `0` terminó bien (también si no había módulos: avisa y sale 0) ·
+`1` la carpeta de `--src` no existe.
+
+No forma parte de la verificación: ni `init.*` ni ningún hook lo llaman. Con
+`src/` vacía no escribe nada — es el estado normal de la plantilla recién
+instanciada.
