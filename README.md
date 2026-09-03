@@ -35,7 +35,10 @@ Después, en este orden:
 3. **Añade tus primeras features a `feature_list.json`**, copiando el bloque
    `_example`. El campo `acceptance` es lo que el reviewer usa para aprobar o
    rechazar: escríbelo como criterios verificables, no como deseos.
-4. **Ejecuta el verificador** — debe quedar verde:
+4. **Ejecuta el verificador** — debe quedar verde. Hasta que completes los pasos
+   1-3 saldrá en **rojo a propósito**: el arnés no te deja trabajar sobre un
+   proyecto sin configurar, porque el reviewer no tendría criterio con el que
+   juzgar el código.
    ```powershell
    ./init.ps1        # Windows
    ```
@@ -51,6 +54,7 @@ Después, en este orden:
 |--------|------------------|--------|
 | `init.ps1` / `init.sh` | agente, hook `Stop`, reviewer | al arrancar la sesión y antes de todo `done` |
 | `bootstrap.ps1` | humano | una vez, al instanciar el proyecto |
+| `scripts/validate_project_setup.py` | `init.*` (y a mano) | bloquea el arranque si el proyecto no está configurado |
 | `scripts/validate_feature_list.py` | `init.*` (y a mano) | para comprobar el alcance |
 | `scripts/harness_test_hook.ps1` | hook `PostToolUse` | automático, tras cada Edit/Write |
 | `scripts/demo_orchestration.py` | humano o agente | para ver el patrón anti-teléfono-descompuesto en acción |

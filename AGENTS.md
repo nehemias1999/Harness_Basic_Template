@@ -10,7 +10,9 @@
 
 1. Ejecuta el verificador y comprueba que termina sin errores:
    `./init.ps1` en Windows, `./init.sh` en WSL/macOS/Linux. Si falla, **para**
-   y resuelve el entorno antes de tocar código.
+   y resuelve el entorno antes de tocar código. Si su sección 3 dice que el
+   proyecto no está configurado, no hay nada que implementar todavía: reporta
+   qué falta y para.
 2. Lee `progress/current.md` para entender en qué estado quedó la última sesión.
 3. Lee `feature_list.json` y elige **una** tarea con estado `pending`. No
    trabajes en más de una a la vez.
@@ -29,6 +31,7 @@
 | `CHECKPOINTS.md`                   | Criterios objetivos de "estado final correcto"            | Para auto-evaluarte |
 | `init.ps1` / `init.sh`             | El verificador (mismo comportamiento en ambas plataformas) | Al arrancar y antes de cerrar |
 | `bootstrap.ps1`                    | Instancia un proyecto nuevo desde la plantilla            | Solo la primera vez, y lo lanza un humano |
+| `scripts/validate_project_setup.py` | Comprueba que el proyecto está configurado (bloqueante)  | Lo llama el verificador; a mano si dudas de qué falta |
 | `schema/feature_list.schema.json`  | Formato exacto de una feature                             | Si dudas de la estructura del alcance |
 | `.claude/agents/`                  | Definiciones de subagentes (líder, implementador, revisor) | Si orquestas trabajo |
 | `.claude/commands/`                | Slash commands del ciclo (`/next-feature`, `/close-session`, `/harness-check`) | Para disparar el ciclo sin escribir el prompt |

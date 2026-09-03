@@ -10,7 +10,8 @@
       `init.sh`), `feature_list.json`, `progress/current.md`.
 - [ ] Existen los 4 docs: `docs/architecture.md`, `docs/conventions.md`,
       `docs/verification.md`, `docs/scripts.md`.
-- [ ] El verificador termina con exit code 0.
+- [ ] El verificador termina con exit code 0. (En la plantilla sin instanciar
+      sale 1 a propósito: la sección 3 exige configurar el proyecto primero.)
 - [ ] Toda ruta mencionada en `CLAUDE.md`, `AGENTS.md` y `README.md` existe
       (sin referencias colgantes).
 
@@ -24,8 +25,9 @@
 
 ## C3 — El código respeta la arquitectura
 
-- [ ] `src/` solo contiene los módulos previstos en `docs/architecture.md`, y
-      `docs/architecture.md` está rellenado (sin placeholders `<...>`).
+- [ ] `src/` solo contiene los módulos previstos en `docs/architecture.md`.
+      (Que `architecture.md` esté rellenado ya lo comprueba el verificador en su
+      sección 3; si estás leyendo esto con el verificador verde, está hecho.)
 - [ ] No hay dependencias externas: no existe `requirements.txt` con contenido,
       ni imports fuera de la stdlib (salvo excepción documentada en una feature).
 - [ ] No hay `print()` sueltos para debug, ni TODOs sin contexto.

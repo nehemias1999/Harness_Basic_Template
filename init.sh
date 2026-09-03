@@ -71,7 +71,21 @@ for f in AGENTS.md CHECKPOINTS.md feature_list.json progress/current.md \
 done
 
 echo ""
-echo "── 3. Validando feature_list.json ──────────────────────"
+echo "── 3. Verificando configuración del proyecto ───────────"
+
+# Bloqueante a propósito: un arnés sin configurar no tiene criterio de calidad
+# (el reviewer juzga contra docs/architecture.md). Ver docs/scripts.md.
+if [ -f "scripts/validate_project_setup.py" ]; then
+  if ! $PY scripts/validate_project_setup.py .; then
+    EXIT_CODE=1
+  fi
+else
+  fail "Falta scripts/validate_project_setup.py — no se puede verificar la configuración"
+  EXIT_CODE=1
+fi
+
+echo ""
+echo "── 4. Validando feature_list.json ──────────────────────"
 
 if [ -f "scripts/validate_feature_list.py" ]; then
   if ! $PY scripts/validate_feature_list.py feature_list.json; then
@@ -83,7 +97,7 @@ else
 fi
 
 echo ""
-echo "── 4. Ejecutando tests ─────────────────────────────────"
+echo "── 5. Ejecutando tests ─────────────────────────────────"
 
 if [ ! -d "tests" ]; then
   warn "La carpeta tests/ no existe todavía"
@@ -108,7 +122,7 @@ else
 fi
 
 echo ""
-echo "── 5. Resumen ──────────────────────────────────────────"
+echo "── 6. Resumen ──────────────────────────────────────────"
 
 if [ $EXIT_CODE -eq 0 ]; then
   ok "Entorno listo. Puedes empezar a trabajar."

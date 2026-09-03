@@ -9,6 +9,7 @@
 |--------|------------------|--------|
 | `init.ps1` / `init.sh` | agente, hook `Stop`, reviewer | al arrancar la sesión y antes de todo `done` |
 | `bootstrap.ps1` | humano | una vez, al instanciar un proyecto nuevo desde la plantilla |
+| `scripts/validate_project_setup.py` | `init.*` (y a mano) | bloquea el arranque si el proyecto no está configurado |
 | `scripts/validate_feature_list.py` | `init.*` (y a mano) | siempre que haya que comprobar el alcance |
 | `scripts/harness_test_hook.ps1` | hook `PostToolUse` | automático, tras cada Edit/Write |
 | `scripts/demo_orchestration.py` | humano o agente | para entender o demostrar el patrón anti-teléfono-descompuesto |
@@ -17,16 +18,17 @@
 
 ## `init.ps1` / `init.sh` — el verificador
 
-Son **el mismo verificador en dos plataformas**: misma estructura de 5 secciones,
+Son **el mismo verificador en dos plataformas**: misma estructura de 6 secciones,
 misma salida `[OK]/[WARN]/[FAIL]`, mismo exit code. Usa `init.ps1` en Windows y
 `init.sh` en WSL, macOS, Linux o CI. Si cambias uno, cambia el otro.
 
 ```
 1. Entorno            intérprete de Python detectado y >= 3.9
 2. Archivos base      los 8 archivos sin los que el arnés no funciona
-3. feature_list.json  delega en scripts/validate_feature_list.py
-4. Tests              descubre y ejecuta tests/
-5. Resumen            veredicto + exit code
+3. Configuración      delega en scripts/validate_project_setup.py  (bloqueante)
+4. feature_list.json  delega en scripts/validate_feature_list.py
+5. Tests              descubre y ejecuta tests/
+6. Resumen            veredicto + exit code
 ```
 
 **Parámetros:** `init.sh` no tiene ninguno. `init.ps1` acepta `-Quiet` para
@@ -41,6 +43,10 @@ Los `[WARN]` **no** bloquean; los `[FAIL]` sí.
   que existen en el PATH pero no ejecutan nada — en Windows el alias `python3` de
   la Microsoft Store es un stub que solo imprime un aviso de instalación. Por eso
   el script no se fía de `command -v` / `Get-Command`: lanza una sonda real.
+- **La plantilla sin instanciar sale en rojo, y es correcto.** La sección 3
+  bloquea el arranque mientras el proyecto no esté configurado. Un repo recién
+  copiado te dice qué ejecutar (`bootstrap.ps1`) en vez de dejarte trabajar sobre
+  un arnés vacío. No es un fallo del template: es el template haciendo su trabajo.
 - **0 tests es `[WARN]`, no `[OK]`.** `unittest discover` sobre una carpeta vacía
   termina con éxito, así que un repo recién instanciado parecería verde sin haber
   verificado nada. El verificador cuenta los tests antes de ejecutarlos y
@@ -54,6 +60,8 @@ Los `[WARN]` **no** bloquean; los `[FAIL]` sí.
 |-------|-----------|
 | `No se encontró un Python ejecutable` | instala Python >= 3.9 o arregla el PATH |
 | `Falta archivo base: X` | el arnés está incompleto: recupera `X` (ver `CHECKPOINTS.md` C1) |
+| `Este repositorio es la plantilla del arnés SIN INSTANCIAR` | ejecuta `./bootstrap.ps1 -Name "..."` |
+| `docs/architecture.md tiene placeholders sin rellenar` | escríbelo: es el criterio del reviewer, sin él no hay revisión posible |
 | `Hay N features en in_progress` | cierra o revierte las features de más: una a la vez |
 | `No se pudieron descubrir los tests` | hay un error de import en `tests/`; ejecuta el discover a mano para verlo |
 | `Hay tests rotos` | arréglalos antes de seguir; no marques nada `done` |
@@ -97,6 +105,37 @@ trabajo tuyo, y el script te lo recuerda en su checklist final.
 
 Después de ejecutarlo, `./init.ps1` debe quedar verde (con `[WARN]` en tests,
 porque todavía no hay código).
+
+---
+
+## `scripts/validate_project_setup.py` — no arrancar a medias
+
+Bloquea la sesión mientras falte lo imprescindible para que el arnés tenga
+sentido. La razón es concreta: el reviewer aprueba o rechaza comparando el código
+contra `docs/architecture.md`, así que **con ese archivo sin rellenar el reviewer
+no tiene criterio** y da por bueno cualquier código que pase los tests. Un arnés
+a medio configurar es peor que no tener arnés, porque parece que verifica.
+
+```bash
+python scripts/validate_project_setup.py          # el repo actual
+python scripts/validate_project_setup.py ../otro
+```
+
+**Bloquea (`[FAIL]`)** cuando:
+
+- `feature_list.json` sigue con el placeholder de `project`.
+- `docs/architecture.md` conserva placeholders `<...>` o su nota de plantilla.
+- `README.md` conserva `<TU_PROYECTO>` o `<DESCRIPCION_PROYECTO>`.
+
+**Solo avisa (`[WARN]`)** cuando falta `description`, no hay features todavía o
+`src/` está vacío: son estados normales al principio de un proyecto.
+
+**Caso especial:** si *nada* está configurado, el repo es la plantilla recién
+copiada. En vez de escupir todos los fallos, imprime el comando de `bootstrap.ps1`
+y para. Ese es el estado en el que vive este template en GitHub: **su verificador
+sale en rojo a propósito**.
+
+Exit codes: `0` configurado · `1` falta configuración imprescindible.
 
 ---
 
