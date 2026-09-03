@@ -25,6 +25,11 @@ Si acabas de copiar esta plantilla, ve a [Arranque rápido](#arranque-rápido).
 ./bootstrap.ps1 -Name "mi-proyecto" -Description "Qué hace."           # de verdad
 ```
 
+Si **clonaste** esta plantilla en vez de copiarla, añade `-ResetGit` para no
+arrastrar su historial. En cualquiera de los dos casos el script deja el
+repositorio git del proyecto listo y, si hacía falta, desconecta el `origin`
+heredado — sin eso tu primer `git push` iría al repo de la plantilla.
+
 Después, en este orden:
 
 1. **Rellena `docs/architecture.md`.** Es el documento contra el que el reviewer
