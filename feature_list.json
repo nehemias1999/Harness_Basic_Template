@@ -1,0 +1,24 @@
+{
+  "project": "<TU_PROYECTO>",
+  "description": "<Una línea describiendo qué hace el proyecto.>",
+  "rules": {
+    "one_feature_at_a_time": true,
+    "require_tests_to_close": true,
+    "valid_status": ["pending", "in_progress", "done", "blocked"]
+  },
+  "_example": {
+    "_comment": "Plantilla de una feature. Copia este objeto dentro de \"features\", quítale el prefijo _ y rellénalo. El campo acceptance es lo que el reviewer usa para aprobar o rechazar: escríbelo como criterios verificables, no como deseos.",
+    "id": 1,
+    "name": "nombre_corto_snake_case",
+    "title": "Título legible de la feature",
+    "description": "Qué hace y por qué, en 1-2 frases.",
+    "acceptance": [
+      "Existe src/<modulo>.py con la función <nombre>()",
+      "<comando concreto> produce <salida concreta>",
+      "Devuelve exit code != 0 y mensaje en stderr si <caso de error>",
+      "tests/test_<modulo>.py cubre camino feliz y al menos un camino de error"
+    ],
+    "status": "pending"
+  },
+  "features": []
+}
