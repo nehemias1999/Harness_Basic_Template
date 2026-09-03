@@ -98,7 +98,21 @@ foreach ($file in $BaseFiles) {
 }
 
 Write-Host ""
-Write-Host "-- 3. Validando feature_list.json ---------------------"
+Write-Host "-- 3. Verificando configuración del proyecto ----------"
+
+# Bloqueante a propósito: un arnés sin configurar no tiene criterio de calidad
+# (el reviewer juzga contra docs/architecture.md). Ver docs/scripts.md.
+if (Test-Path -LiteralPath "scripts/validate_project_setup.py" -PathType Leaf) {
+    $setup = & $Py "scripts/validate_project_setup.py" "."
+    if ($LASTEXITCODE -ne 0) { $ExitCode = 1 }
+    $setup | ForEach-Object { Write-Host $_ }
+} else {
+    Write-Fail "Falta scripts/validate_project_setup.py — no se puede verificar la configuración"
+    $ExitCode = 1
+}
+
+Write-Host ""
+Write-Host "-- 4. Validando feature_list.json ---------------------"
 
 # Misma lógica de validación que init.sh: ambos delegan en el mismo módulo
 # para que las reglas del alcance no se desincronicen entre plataformas.
@@ -114,7 +128,7 @@ if (Test-Path -LiteralPath "scripts/validate_feature_list.py" -PathType Leaf) {
 }
 
 Write-Host ""
-Write-Host "-- 4. Ejecutando tests --------------------------------"
+Write-Host "-- 5. Ejecutando tests --------------------------------"
 
 if (-not (Test-Path -LiteralPath "tests" -PathType Container)) {
     Write-Warn "La carpeta tests/ no existe todavía"
@@ -148,7 +162,7 @@ if (-not (Test-Path -LiteralPath "tests" -PathType Container)) {
 }
 
 Write-Host ""
-Write-Host "-- 5. Resumen -----------------------------------------"
+Write-Host "-- 6. Resumen -----------------------------------------"
 
 if ($ExitCode -eq 0) {
     Write-Ok "Entorno listo. Puedes empezar a trabajar."
