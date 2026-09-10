@@ -66,6 +66,18 @@ class FeatureListCase(unittest.TestCase):
         with open(os.path.join(self.root, "tests", "test_algo.py"), "w") as handle:
             handle.write("# un test\n")
 
+    def crear_informes(self, name: str = "una_feature", veredicto: str = "APPROVED") -> None:
+        os.makedirs(os.path.join(self.root, "progress"), exist_ok=True)
+        with open(os.path.join(self.root, "progress", f"impl_{name}.md"), "w") as handle:
+            handle.write("# informe del implementer\n")
+        with open(os.path.join(self.root, "progress", f"review_{name}.md"), "w") as handle:
+            handle.write(f"# review\n\n**Veredicto:** {veredicto}\n")
+
+    def cerrar_bien(self, name: str = "una_feature") -> None:
+        """Todo lo que el arnés exige para que una feature pueda estar `done`."""
+        self.crear_test()
+        self.crear_informes(name)
+
     def errores(self, features: list, rules: dict | None = None) -> list[str]:
         return vfl.validate(self.escribir(features, rules))
 
@@ -167,15 +179,46 @@ class TestFormaDeLaFeature(FeatureListCase):
         self.assertErrorCon("no es un objeto", ["esto no es una feature"])
 
 
-class TestCierreSinPruebas(FeatureListCase):
+class TestCierreDeUnaFeature(FeatureListCase):
+    """Nadie se autoaprueba: cerrar exige pruebas y los dos informes."""
+
     def test_done_sin_ningun_test_falla(self) -> None:
+        self.crear_informes()
         self.assertErrorCon("ni un solo test", [feature(status="done")])
 
-    def test_done_con_tests_pasa(self) -> None:
+    def test_done_sin_informe_del_implementer_falla(self) -> None:
         self.crear_test()
+        os.makedirs(os.path.join(self.root, "progress"), exist_ok=True)
+        with open(os.path.join(self.root, "progress", "review_una_feature.md"), "w") as h:
+            h.write("**Veredicto:** APPROVED\n")
+        self.assertErrorCon("informe del implementer", [feature(status="done")])
+
+    def test_done_sin_review_falla(self) -> None:
+        self.crear_test()
+        os.makedirs(os.path.join(self.root, "progress"), exist_ok=True)
+        with open(os.path.join(self.root, "progress", "impl_una_feature.md"), "w") as h:
+            h.write("# informe\n")
+        self.assertErrorCon("informe del reviewer", [feature(status="done")])
+
+    def test_done_con_changes_requested_falla(self) -> None:
+        self.crear_test()
+        self.crear_informes(veredicto="CHANGES_REQUESTED")
+        self.assertErrorCon("pidió cambios", [feature(status="done")])
+
+    def test_done_con_un_review_que_no_dice_nada_falla(self) -> None:
+        self.crear_test()
+        os.makedirs(os.path.join(self.root, "progress"), exist_ok=True)
+        with open(os.path.join(self.root, "progress", "impl_una_feature.md"), "w") as h:
+            h.write("# informe\n")
+        with open(os.path.join(self.root, "progress", "review_una_feature.md"), "w") as h:
+            h.write("# review\n\nMe parece bien.\n")
+        self.assertErrorCon("no dice APPROVED", [feature(status="done")])
+
+    def test_done_bien_cerrada_pasa(self) -> None:
+        self.cerrar_bien()
         self.assertEqual(self.errores([feature(status="done")]), [])
 
-    def test_sin_features_done_no_exige_tests(self) -> None:
+    def test_sin_features_done_no_exige_nada(self) -> None:
         self.assertEqual(self.errores([feature(status="pending")]), [])
 
 

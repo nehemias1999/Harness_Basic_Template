@@ -6,6 +6,7 @@ prioridad: media
 creado: <YYYY-MM-DD>
 actualizado: <YYYY-MM-DD>
 aprobado_el:
+aprobado_hash:
 ronda: 1
 ---
 
@@ -18,6 +19,12 @@ ronda: 1
      Estados: draft (en análisis) · aprobado (firmado por el humano) ·
      descartado (el humano lo sacó; el archivo se queda como historia).
      Prioridad: critica · alta · media · baja. La heredan sus features.
+
+     `aprobado_el` y `aprobado_hash` los escribe /aprobar-requisitos al firmar.
+     La huella es del contenido de este archivo (sin §7 ni §8, que cambian
+     después): si alguien edita los criterios de un requisito ya aprobado, el
+     verificador lo dice en vez de dejar al reviewer juzgando contra algo que
+     nadie leyó.
 
      Este archivo empieza por `_`, así que el validador lo ignora: por eso
      puede conservar sus <placeholders>. -->

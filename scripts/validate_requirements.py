@@ -21,6 +21,9 @@ Qué bloquea (`[FAIL]`)
       regla de "no asumir nada", hecha ejecutable.
     - Un spec `aprobado` sin `aprobado_el`, con una fecha que no es AAAA-MM-DD,
       o sin ninguna feature que lo referencie.
+    - Un spec `aprobado` sin `aprobado_hash`, o cuyo contenido cambió después
+      de aprobarse. Sin esa huella, "aprobado" solo significa que alguien
+      escribió la palabra: editarle los criterios luego no dejaba rastro.
     - Un frontmatter con claves repetidas, o con un `id` que no coincide con el
       nombre del archivo (ese spec no se carga).
     - Una feature con prioridad MÁS ALTA que la de su requisito. Bajarla es
@@ -44,6 +47,10 @@ Quién lo ejecuta
 
 Uso
     python scripts/validate_requirements.py [raiz_del_repo]
+    python scripts/validate_requirements.py --huella specs/REQ-001_x.md
+
+    La segunda forma imprime la huella del contenido de un spec: es lo que
+    escribe `/aprobar-requisitos` en `aprobado_hash` al firmarlo.
 
 Exit codes
     0  la trazabilidad requisito -> feature es coherente (los [WARN] no bloquean)
@@ -51,6 +58,7 @@ Exit codes
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -65,6 +73,12 @@ SPEC_POINTER_RE = re.compile(r"^specs/REQ-\d{3}_[a-z0-9]+(?:_[a-z0-9]+)*\.md$")
 OPEN_QUESTION_RE = re.compile(r"^\s*[-*+]\s*\[\s*\]", re.MULTILINE)
 FENCED_BLOCK_RE = re.compile(r"^\s*(?:```|~~~).*?^\s*(?:```|~~~)", re.MULTILINE | re.DOTALL)
 FECHA_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+FRONTMATTER_RE = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
+# §7 (features derivadas) y §8 (bitácora) cambian después de aprobar sin que
+# cambie lo aprobado: quedan fuera de la huella.
+SECCIONES_MUTABLES_RE = re.compile(
+    r"^##\s*[78]\..*?(?=^##\s|\Z)", re.MULTILINE | re.DOTALL
+)
 
 # Extensiones que cuentan como "código de la aplicación" al comprobar que
 # nadie programó antes de tener un requisito aprobado. No es solo Python: la
@@ -127,6 +141,27 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]] | None:
             continue
         fields[key] = value
     return None
+
+
+def huella_del_spec(contenido: str) -> str:
+    """Huella del contenido que se aprobó.
+
+    Aprobar un requisito no puede significar solo "en algún momento alguien
+    escribió `aprobado`": sin una huella del texto, editarle los criterios
+    después no deja rastro y el reviewer termina juzgando contra algo que el
+    humano nunca leyó.
+
+    Se excluyen dos secciones que sí cambian legítimamente después de aprobar:
+    la tabla de features derivadas (§7) y la bitácora de revisiones (§8). Todo
+    lo demás cuenta, incluido el frontmatter que no sea de estado: es una lista
+    negra corta a propósito, para que cualquier sección nueva quede protegida
+    por defecto.
+    """
+    cuerpo = FRONTMATTER_RE.sub("", contenido, count=1)
+    cuerpo = SECCIONES_MUTABLES_RE.sub("", cuerpo)
+    lineas = [linea.rstrip() for linea in cuerpo.splitlines()]
+    normalizado = "\n".join(linea for linea in lineas if linea)
+    return hashlib.sha256(normalizado.encode("utf-8")).hexdigest()[:16]
 
 
 def contar_codigo(src_dir: str) -> int:
@@ -220,6 +255,7 @@ def load_specs(root: str) -> tuple[dict[str, dict], list[str]]:
             )
 
         fields["_ruta"] = rel
+        fields["_huella"] = huella_del_spec(contenido)
         # Se ignoran los bloques de código: un checkbox de ejemplo dentro de
         # unas comillas triples no es una pregunta sin responder.
         fields["_preguntas_abiertas"] = len(
@@ -345,6 +381,20 @@ def check(root: str) -> tuple[list[str], list[str]]:
                 f"{rel}: aprobado_el vale \"{fecha}\" y tiene que ser una fecha "
                 f"AAAA-MM-DD. Una aprobación sin fecha real no sirve como traza"
             )
+        huella_declarada = spec.get("aprobado_hash", "")
+        if not huella_declarada:
+            fails.append(
+                f"{rel}: está aprobado pero no tiene aprobado_hash. Sin huella "
+                f"del texto aprobado, editarle los criterios después no deja "
+                f"rastro: vuelve a aprobarlo con /aprobar-requisitos"
+            )
+        elif huella_declarada != spec["_huella"]:
+            fails.append(
+                f"{rel}: el requisito cambió DESPUÉS de aprobarse "
+                f"(huella {huella_declarada}, ahora {spec['_huella']}). "
+                f"Vuelve el spec a draft y que el humano apruebe la versión "
+                f"nueva, o deshaz el cambio"
+            )
         if spec["_preguntas_abiertas"]:
             fails.append(
                 f"{rel}: está aprobado con {spec['_preguntas_abiertas']} pregunta(s) "
@@ -395,6 +445,14 @@ def check(root: str) -> tuple[list[str], list[str]]:
 
 
 def main(argv: list[str]) -> int:
+    if len(argv) > 2 and argv[1] == "--huella":
+        try:
+            print(huella_del_spec(_read(argv[2])))
+        except OSError as exc:
+            print(f"[FAIL]  no se pudo leer {argv[2]}: {exc}")
+            return 1
+        return 0
+
     root = argv[1] if len(argv) > 1 else "."
     fails, warns = check(root)
 

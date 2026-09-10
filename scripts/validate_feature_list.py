@@ -79,6 +79,40 @@ def orden_de_trabajo(features: list) -> list:
     return sorted(pendientes, key=lambda f: (prioridad_rank(f.get("prioridad")), f.get("id", 0)))
 
 
+def informes_de_cierre(root: str, name: str) -> list[str]:
+    """Qué le falta a una feature `done` para estar realmente cerrada.
+
+    El ciclo dice que una feature se cierra tras un APPROVED del reviewer, pero
+    hasta ahora ningún código miraba ese veredicto: bastaba con escribir "done"
+    en el JSON. Esto no vuelve infalsificable el review —el informe lo escribe
+    un agente— pero obliga a que el artefacto exista y quede en git, que es lo
+    que permite auditarlo después.
+    """
+    faltan: list[str] = []
+    impl = os.path.join(root, "progress", f"impl_{name}.md")
+    review = os.path.join(root, "progress", f"review_{name}.md")
+
+    if not os.path.isfile(impl):
+        faltan.append(f"falta el informe del implementer (progress/impl_{name}.md)")
+
+    if not os.path.isfile(review):
+        faltan.append(f"falta el informe del reviewer (progress/review_{name}.md)")
+        return faltan
+
+    try:
+        with open(review, encoding="utf-8") as handle:
+            contenido = handle.read()
+    except OSError as exc:
+        faltan.append(f"no se pudo leer progress/review_{name}.md: {exc}")
+        return faltan
+
+    if "CHANGES_REQUESTED" in contenido and "APPROVED" not in contenido:
+        faltan.append(f"el reviewer pidió cambios en progress/review_{name}.md")
+    elif "APPROVED" not in contenido:
+        faltan.append(f"progress/review_{name}.md no dice APPROVED por ningún lado")
+    return faltan
+
+
 def hay_tests(root: str) -> bool:
     """¿Existe al menos un archivo de test? No los ejecuta: eso es del verificador."""
     tests_dir = os.path.join(root, "tests")
@@ -214,12 +248,21 @@ def validate(path: str) -> list[str]:
     # require_tests_to_close, hecho ejecutable: cerrar una feature sin un solo
     # test no es "verificado", es "nadie miró". El verificador los ejecuta; aquí
     # solo se comprueba que existan.
+    root = os.path.dirname(os.path.abspath(path))
     cerradas = [f for f in features if isinstance(f, dict) and f.get("status") == "done"]
-    if cerradas and not hay_tests(os.path.dirname(os.path.abspath(path))):
+    if cerradas and not hay_tests(root):
         errors.append(
             f"hay {len(cerradas)} feature(s) en done y ni un solo test en tests/: "
             f"una feature no se cierra sin pruebas (rules.require_tests_to_close)"
         )
+
+    # Nadie se autoaprueba: el cierre exige los dos informes del ciclo.
+    for feature in cerradas:
+        name = feature.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        for problema in informes_de_cierre(root, name):
+            errors.append(f"feature {feature.get('id')} {name} está en done y {problema}")
 
     return errors
 
