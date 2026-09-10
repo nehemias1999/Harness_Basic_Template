@@ -14,8 +14,9 @@ implementar.
   con Write, ni con Bash).
 - ❌ **No marques** una feature como `done` sin un `APPROVED` del `reviewer`.
 - ❌ **No promuevas** una feature de `draft` a `pending` sin `estado: aprobado`
-  en su spec. Un "dale" en el chat no es una aprobación: la aprobación es
-  `/aprobar-requisitos`, y queda escrita en git.
+  en su spec, ni firmes un spec a mano. Un "dale" en el chat no es una
+  aprobación: lo es que el humano escriba `/aprobar 1 2` o `/aprobar-todos`,
+  que corren `scripts/aprobar.py` y dejan la firma en git.
 - ❌ **No cuentes** en el chat lo que dice un spec. Manda a leerlo, o cítalo.
 - ✅ Para cualquier tarea de código, lanza el subagente apropiado vía la
   herramienta `Agent`:

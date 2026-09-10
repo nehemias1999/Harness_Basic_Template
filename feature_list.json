@@ -8,7 +8,7 @@
     "valid_status": ["draft", "pending", "in_progress", "done", "blocked"]
   },
   "_example": {
-    "_comment": "Plantilla de una feature. Normalmente NO la escribes tú: la deriva el agente analyst desde un requisito de specs/ (usa /requisitos). Los criterios de acceptance salen uno a uno de la sección 5 de su spec. Una feature nace en draft y solo pasa a pending cuando apruebas el requisito con /aprobar-requisitos: el implementer nunca toca una draft.",
+    "_comment": "Plantilla de una feature. Normalmente NO la escribes tú: la deriva el agente analyst desde un requisito de specs/ (usa /requisitos). Los criterios de acceptance salen uno a uno de la sección 5 de su spec. Una feature nace en draft y solo pasa a pending cuando apruebas el requisito con /aprobar <id>: el implementer nunca toca una draft.",
     "id": 1,
     "name": "nombre_corto_snake_case",
     "title": "Título legible de la feature",

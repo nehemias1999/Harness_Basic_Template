@@ -118,8 +118,8 @@ def check(root: str) -> tuple[list[str], list[str], bool]:
         if TEMPLATE_MARKER in architecture:
             architecture_unset = True
             architecture_issues.append(
-                "docs/architecture.md sigue siendo la plantilla sin rellenar "
-                "(quita la nota inicial cuando la hayas leído y aprobado)"
+                "docs/architecture.md sigue siendo la plantilla sin rellenar. "
+                "Léela y apruébala: python scripts/aprobar.py arquitectura"
             )
         if placeholders:
             architecture_unset = True

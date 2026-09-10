@@ -24,10 +24,11 @@ Es un bucle, no un paso. Cada vuelta es una **ronda**:
         ↑                                                        │
         └──────── agrega / modifica / saca ──────────────────────┘
                                                                  │ su OK
-                                          /aprobar-requisitos ───┘
+                                    /aprobar 1 2 ───┘
 ```
 
-Del bucle solo se sale por `/aprobar-requisitos`, que **no ejecutas tú**.
+Del bucle solo se sale cuando el humano nombra qué firma: `/aprobar 1 2` o
+`/aprobar-todos`. **Eso no lo ejecutas tú.**
 
 El ciclo vale en cualquier momento del proyecto, no solo al empezar: si llega
 un requisito nuevo con una feature ya `in_progress`, haces exactamente lo
@@ -121,7 +122,7 @@ que analizar nunca interrumpe lo que se está desarrollando.
 - ❌ Nunca escribas en `src/` ni en `tests/`.
 - ❌ Nunca cambies `estado: draft` a `aprobado`, ni una feature a `pending`.
   Tampoco "porque el humano dijo que sí en el chat": lo que aprueba es
-  `/aprobar-requisitos`, que lo deja escrito en git.
+  el humano con `/aprobar <ids>`, y queda escrito en git.
 - ❌ Nunca edites un spec con `estado: aprobado`.
 - ❌ Nunca toques una feature que no esté en `draft`.
 - ❌ Nunca inventes un actor, un límite, un formato ni un caso de error que no

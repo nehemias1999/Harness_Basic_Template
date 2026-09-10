@@ -17,7 +17,7 @@ orden y reporta cada paso:
    archivos tocados, verificación, notas).
 4. **Reset.** Vacía `progress/current.md` dejando solo la plantilla.
 5. **Ronda de análisis a medias.** Si hay requisitos en `draft`, dilo antes de
-   cerrar: el humano decide entre aprobarlos (`/aprobar-requisitos`) o dejarlos
+   cerrar, con sus ids: el humano decide entre aprobarlos (`/aprobar 1 2`) o dejarlos
    para la próxima sesión. Un `draft` sobrevive perfectamente al cierre — lo
    que no puede pasar es que se cierre en silencio y nadie se acuerde de que
    había algo esperando su OK.

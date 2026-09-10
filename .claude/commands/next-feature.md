@@ -30,7 +30,7 @@ tú directamente).
 
 - Si además hay features en `draft`, el problema no es que falte trabajo: hay
   requisitos esperando el OK del humano. Dile cuáles y sugiérele
-  `/aprobar-requisitos`.
+  `/aprobar <ids>` o `/aprobar-todos`.
 - Si tampoco hay `draft`, el proyecto todavía no tiene alcance: `/requisitos`.
 
 **`specs/` es de solo lectura en este ciclo.** Si un criterio de `acceptance`

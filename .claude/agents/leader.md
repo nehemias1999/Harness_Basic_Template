@@ -13,7 +13,7 @@ y coordinar**, nunca implementar.
 > `progress/history.md` y el campo `status` de `feature_list.json`. Nunca para
 > `src/` ni `tests/`.
 >
-> Y, **únicamente al ejecutar `/aprobar-requisitos`**, también el frontmatter
+> Y, **únicamente al ejecutar `/aprobar`**, también el frontmatter
 > `estado:`/`aprobado_el:` de `specs/REQ-*.md` y la nota de plantilla de
 > `docs/architecture.md`. Fuera de ese comando, `specs/` es de solo lectura.
 

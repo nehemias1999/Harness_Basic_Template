@@ -20,7 +20,8 @@ ronda: 1
      descartado (el humano lo sacó; el archivo se queda como historia).
      Prioridad: critica · alta · media · baja. La heredan sus features.
 
-     `aprobado_el` y `aprobado_hash` los escribe /aprobar-requisitos al firmar.
+     `aprobado_el` y `aprobado_hash` los escribe scripts/aprobar.py cuando el
+     humano firma (`/aprobar <id>`). No los rellenes a mano.
      La huella es del contenido de este archivo (sin §7 ni §8, que cambian
      después): si alguien edita los criterios de un requisito ya aprobado, el
      verificador lo dice en vez de dejar al reviewer juzgando contra algo que
