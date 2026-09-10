@@ -128,7 +128,22 @@ if (Test-Path -LiteralPath "scripts/validate_feature_list.py" -PathType Leaf) {
 }
 
 Write-Host ""
-Write-Host "-- 5. Ejecutando tests --------------------------------"
+Write-Host "-- 5. Validando requisitos y trazabilidad -------------"
+
+# Bloqueante a propósito: la aprobación de un requisito no es un "dale" en el
+# chat, es `estado: aprobado` en specs/ mas la feature en `pending`. Este
+# módulo lo comprueba igual en Windows y en POSIX. Ver docs/scripts.md.
+if (Test-Path -LiteralPath "scripts/validate_requirements.py" -PathType Leaf) {
+    $requirements = & $Py "scripts/validate_requirements.py" "."
+    if ($LASTEXITCODE -ne 0) { $ExitCode = 1 }
+    $requirements | ForEach-Object { Write-Host $_ }
+} else {
+    Write-Fail "Falta scripts/validate_requirements.py — no se puede verificar la trazabilidad"
+    $ExitCode = 1
+}
+
+Write-Host ""
+Write-Host "-- 6. Ejecutando tests --------------------------------"
 
 if (-not (Test-Path -LiteralPath "tests" -PathType Container)) {
     Write-Warn "La carpeta tests/ no existe todavía"
@@ -162,7 +177,7 @@ if (-not (Test-Path -LiteralPath "tests" -PathType Container)) {
 }
 
 Write-Host ""
-Write-Host "-- 6. Resumen -----------------------------------------"
+Write-Host "-- 7. Resumen -----------------------------------------"
 
 if ($ExitCode -eq 0) {
     Write-Ok "Entorno listo. Puedes empezar a trabajar."
