@@ -111,6 +111,10 @@ jobs:
             exit 1
           }
 
+          # El paso hereda el $LASTEXITCODE del verificador, que sale con 1 a
+          # propósito. Sin esto, el job falla aunque las comprobaciones pasen.
+          exit 0
+
   paridad:
     name: Paridad de las secciones
     runs-on: ubuntu-latest
