@@ -158,5 +158,84 @@ class TestEventoPostEdit(unittest.TestCase):
         self.assertNotIn("Traceback", out + err)
 
 
+class TestPreToolUse(unittest.TestCase):
+    """La capa que verifica no se edita mientras se trabaja."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = self._tmp.name
+        self._patch = mock.patch.object(hh, "REPO_ROOT", self.root)
+        self._patch.start()
+        # Sin marca de mantenimiento y sin la variable de entorno.
+        self._env = mock.patch.dict(os.environ, {}, clear=False)
+        self._env.start()
+        os.environ.pop("HARNESS_MANTENIMIENTO", None)
+
+    def tearDown(self) -> None:
+        self._env.stop()
+        self._patch.stop()
+        self._tmp.cleanup()
+
+    def _correr(self, entrada: dict) -> tuple[int, str]:
+        err = io.StringIO()
+        with mock.patch.object(hh, "_entrada_del_hook", return_value=entrada), \
+             redirect_stderr(err), redirect_stdout(io.StringIO()):
+            code = hh.evento_pre_tool_use()
+        return code, err.getvalue()
+
+    def _escritura(self, ruta: str, herramienta: str = "Write") -> tuple[int, str]:
+        return self._correr({"tool_name": herramienta, "tool_input": {"file_path": ruta}})
+
+    def _shell(self, comando: str) -> tuple[int, str]:
+        return self._correr({"tool_name": "Bash", "tool_input": {"command": comando}})
+
+    def test_bloquea_escribir_en_los_validadores(self) -> None:
+        code, err = self._escritura("scripts/validate_requirements.py")
+        self.assertEqual(code, 2)
+        self.assertIn("capa que verifica", err)
+
+    def test_bloquea_escribir_en_los_hooks(self) -> None:
+        self.assertEqual(self._escritura(".claude/settings.json", "Edit")[0], 2)
+
+    def test_bloquea_escribir_en_el_verificador(self) -> None:
+        self.assertEqual(self._escritura("init.sh")[0], 2)
+        self.assertEqual(self._escritura("init.ps1")[0], 2)
+
+    def test_bloquea_escribir_en_el_contrato(self) -> None:
+        for ruta in ("AGENTS.md", "CLAUDE.md", "CHECKPOINTS.md"):
+            with self.subTest(ruta=ruta):
+                self.assertEqual(self._escritura(ruta)[0], 2)
+
+    def test_deja_pasar_el_codigo_del_proyecto(self) -> None:
+        for ruta in ("src/modulo.py", "tests/test_modulo.py", "feature_list.json",
+                     "progress/current.md", "specs/REQ-001_algo.md", "docs/architecture.md"):
+            with self.subTest(ruta=ruta):
+                self.assertEqual(self._escritura(ruta)[0], hh.PASA)
+
+    def test_bloquea_una_escritura_de_shell_disfrazada(self) -> None:
+        # El matcher Edit|Write no ve esto; PreToolUse sobre Bash, sí.
+        self.assertEqual(self._shell("echo pass > scripts/validate_requirements.py")[0], 2)
+        self.assertEqual(self._shell("rm -rf scripts/tests")[0], 2)
+
+    def test_no_estorba_a_una_lectura_de_shell(self) -> None:
+        self.assertEqual(self._shell("cat scripts/validate_requirements.py")[0], hh.PASA)
+        self.assertEqual(self._shell("python scripts/validate_requirements.py .")[0], hh.PASA)
+
+    def test_la_marca_de_mantenimiento_abre_la_puerta(self) -> None:
+        with open(os.path.join(self.root, hh.MARCA_MANTENIMIENTO), "w") as handle:
+            handle.write("")
+        self.assertEqual(self._escritura("scripts/validate_requirements.py")[0], hh.PASA)
+
+    def test_la_variable_de_entorno_tambien(self) -> None:
+        os.environ["HARNESS_MANTENIMIENTO"] = "1"
+        try:
+            self.assertEqual(self._escritura("init.ps1")[0], hh.PASA)
+        finally:
+            os.environ.pop("HARNESS_MANTENIMIENTO", None)
+
+    def test_una_ruta_de_fuera_del_repo_no_es_asunto_suyo(self) -> None:
+        self.assertEqual(self._escritura("/tmp/otro/scripts/cosa.py")[0], hh.PASA)
+
+
 if __name__ == "__main__":
     unittest.main()

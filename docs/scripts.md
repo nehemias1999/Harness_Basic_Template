@@ -148,6 +148,23 @@ porque todavía no hay código).
 
 ---
 
+## Permisos: `deny` gana sobre `allow`
+
+`.claude/settings.json` ya no pre-aprueba `bootstrap.ps1`: está en `deny`.
+Instanciar un proyecto es un acto humano —lo dicen `AGENTS.md` y este mismo
+documento— y el script vacía `features`, borra los requisitos de `specs/` y
+puede borrar `.git` entero. Tenerlo en `allow` significaba que un agente podía
+ejecutarlo sin una sola confirmación. Si necesitás correrlo, corrélo vos.
+
+Los patrones de `allow` son ahora **exactos**, sin comodines de sufijo. Un
+patrón como `PowerShell(./init.ps1*)` pre-aprobaba también
+`./init.ps1; Remove-Item -Recurse -Force .git`, porque el comodín cubre todo lo
+que venga detrás. Y `Bash(python scripts/*)` pre-aprobaba ejecutar **cualquier
+archivo que el propio agente acabara de escribir** en `scripts/`. El precio de
+la precisión es alguna confirmación de más; vale la pena.
+
+---
+
 ## `scripts/validate_project_setup.py` — no arrancar a medias
 
 Bloquea la sesión mientras falte lo imprescindible para que el arnés tenga
@@ -297,9 +314,28 @@ agente reacciona. Si bloqueara siempre, la sesión no cerraría nunca: por eso s
 respeta `stop_hook_active`, que avisa de que ya venimos de un bloqueo. Y ojo:
 `stop` **no se dispara si interrumpes con Ctrl+C**.
 
-**Lo que los hooks no cubren.** El matcher es `Edit|Write`: una escritura hecha
-con `Bash` (`python -c "open(...)"`, `echo >`) no dispara nada. Los hooks son
-una red, no una jaula.
+### `pre-tool-use` — lo único que llega a tiempo
+
+`stop` y `post-edit` llegan cuando la escritura ya ocurrió. `PreToolUse` llega
+antes, y es donde el arnés protege **la capa que lo verifica**: `scripts/`,
+`.claude/`, `schema/`, `init.*`, `bootstrap.ps1`, `AGENTS.md`, `CLAUDE.md` y
+`CHECKPOINTS.md`.
+
+El motivo es concreto: un agente que ve rojo tiene a mano una forma trivial de
+ponerlo en verde, que es editar el validador. Pedírselo por favor en un `.md` no
+alcanza, porque es exactamente el archivo que puede reescribir.
+
+También mira los comandos de shell, porque el matcher `Edit|Write` no ve un
+`echo x > scripts/validador.py`. Es una heurística corta —busca señales de
+escritura (`>`, `rm`, `mv`, `sed -i`, `Remove-Item`…) sobre rutas protegidas— y
+se queda deliberadamente corta: perseguir todas las formas de escribir desde
+`Bash` daría falsos positivos constantes. Sigue siendo una red, no una jaula.
+
+**Cómo mantener el propio arnés.** La puerta existe, pero hay que abrirla a
+sabiendas: creá `.harness-mantenimiento` en la raíz (o exportá
+`HARNESS_MANTENIMIENTO=1`) y borralo al terminar. La diferencia con no tener
+protección es que el archivo aparece en `git status`: la edición deja de ser
+silenciosa y pasa a ser una decisión visible.
 
 Es Python y no PowerShell para que funcione igual en Windows y en POSIX: la
 versión anterior era PowerShell puro y en WSL o Linux no corría en absoluto.

@@ -91,8 +91,14 @@ según el sistema. Lo único que puede hacer falta cambiar en Linux es el nombre
 del intérprete (`python` → `python3`) si tu distribución no expone `python`.
 
 Esos hooks **bloquean**: salen con exit 2, así que el turno no cierra con el
-verificador en rojo ni con los tests rotos. Lo que no cubren es una escritura
-hecha con `Bash` en vez de con Edit/Write — son una red, no una jaula.
+verificador en rojo ni con los tests rotos. Y un tercero, `PreToolUse`, llega
+antes de la escritura y protege la capa que verifica el trabajo (`scripts/`,
+`.claude/`, `init.*`, `AGENTS.md`, `CLAUDE.md`, `CHECKPOINTS.md`): un agente
+que ve rojo no arregla el rojo editando el validador.
+
+Para mantener el propio arnés hay que declararlo: creá `.harness-mantenimiento`
+en la raíz y borralo al terminar. El archivo aparece en `git status`, así que
+la edición deja de ser silenciosa y pasa a ser una decisión visible.
 
 ## El ciclo de trabajo
 
@@ -218,3 +224,8 @@ cuanto el subagente termina. Así auditas paso a paso quién decidió qué.
 - **Los permisos son parte del diseño**: si un subagente necesita escribir su
   informe, su frontmatter tiene que incluir `Write`. Un rol sin las herramientas
   para cumplir su protocolo es un rol roto.
+- **Pero `tools:` restringe por herramienta, no por ruta**, y todos los roles
+  necesitan `Bash`, que es un primitivo de escritura universal. "El reviewer no
+  edita código" es una regla real solo desde que hay un hook que la hace
+  cumplir; antes era una promesa. Cuando una regla importa, hay que preguntarse
+  qué la obliga, no dónde está escrita.

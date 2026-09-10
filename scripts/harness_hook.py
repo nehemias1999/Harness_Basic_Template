@@ -12,13 +12,17 @@ Propósito
     edición.
 
 Eventos
-    stop        Antes de cerrar el turno: corre el verificador entero. Si está
-                en rojo, bloquea (exit 2) y le dice al agente qué falta.
-    post-edit   Tras cada Edit/Write: corre los tests. Si están rotos, bloquea.
+    stop          Antes de cerrar el turno: corre el verificador entero. Si
+                  está en rojo, bloquea (exit 2) y le dice al agente qué falta.
+    post-edit     Tras cada Edit/Write: corre los tests. Si están rotos, bloquea.
+    pre-tool-use  ANTES de escribir: protege la capa que verifica. Es el único
+                  momento en que se puede impedir una escritura, porque los
+                  otros dos hooks llegan cuando ya ocurrió.
 
 Uso
     python scripts/harness_hook.py stop
     python scripts/harness_hook.py post-edit [--tests-dir tests]
+    python scripts/harness_hook.py pre-tool-use
 
     Los invoca `.claude/settings.json`. A mano sirven para probarlos.
 
@@ -164,9 +168,112 @@ def evento_post_edit(tests_dir: str) -> int:
     )
 
 
+# --- pre-tool-use: la capa que verifica no se edita mientras se trabaja -----
+
+# Los archivos que deciden si el trabajo está bien hecho. Un agente que ve rojo
+# no arregla el rojo editando el validador, y esa tentación no se resuelve
+# pidiéndoselo por favor en un .md.
+ZONA_PROTEGIDA = (
+    ".claude/",
+    "scripts/",
+    "schema/",
+    "init.ps1",
+    "init.sh",
+    "bootstrap.ps1",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "CHECKPOINTS.md",
+)
+
+MARCA_MANTENIMIENTO = ".harness-mantenimiento"
+
+# Señales de escritura en una línea de shell. Es una heurística a propósito
+# corta: `Bash` puede escribir de mil formas y perseguirlas todas daría falsos
+# positivos constantes. Cubre las que aparecen de verdad.
+TOKENS_DE_ESCRITURA = (
+    ">", ">>", "tee ", "rm ", "mv ", "cp ", "sed -i", "truncate ",
+    "Set-Content", "Add-Content", "Out-File", "Remove-Item", "New-Item",
+)
+
+HERRAMIENTAS_DE_ESCRITURA = ("Write", "Edit", "MultiEdit", "NotebookEdit")
+
+
+def en_mantenimiento() -> bool:
+    """¿Estamos trabajando sobre el propio arnés, y a sabiendas?
+
+    La puerta existe porque la plantilla también se mantiene. Lo que cambia es
+    que abrirla es un acto deliberado y visible —un archivo que aparece en
+    `git status`— en vez de una edición silenciosa a mitad de una sesión de
+    desarrollo.
+    """
+    if os.environ.get("HARNESS_MANTENIMIENTO"):
+        return True
+    return os.path.exists(os.path.join(REPO_ROOT, MARCA_MANTENIMIENTO))
+
+
+def ruta_protegida(ruta: str) -> str | None:
+    """Devuelve el prefijo protegido que toca `ruta`, o None."""
+    if not ruta:
+        return None
+    normal = ruta.replace("\\", "/")
+    # Una ruta relativa se resuelve contra la raíz del repositorio, no contra
+    # el cwd: el hook no controla desde dónde lo llaman.
+    absoluta = normal if os.path.isabs(normal) else os.path.join(REPO_ROOT, normal)
+    try:
+        relativa = os.path.relpath(os.path.abspath(absoluta), REPO_ROOT).replace("\\", "/")
+    except ValueError:
+        relativa = normal
+    if relativa.startswith(".."):
+        return None
+    for prefijo in ZONA_PROTEGIDA:
+        if relativa == prefijo or relativa.startswith(prefijo):
+            return prefijo
+    return None
+
+
+def _motivo(objetivo: str) -> str:
+    return (
+        f"[harness] {objetivo} es parte de la capa que verifica el trabajo, y no "
+        f"se toca durante una sesión de desarrollo: un agente que ve rojo no "
+        f"arregla el rojo editando el validador.\n"
+        f"Si de verdad estás manteniendo el arnés, dilo explícitamente creando "
+        f"el archivo {MARCA_MANTENIMIENTO} en la raíz (o exportando "
+        f"HARNESS_MANTENIMIENTO=1) y bórralo al terminar."
+    )
+
+
+def evento_pre_tool_use() -> int:
+    entrada = _entrada_del_hook()
+    herramienta = entrada.get("tool_name", "")
+    datos = entrada.get("tool_input") or {}
+    if not isinstance(datos, dict):
+        return PASA
+
+    if en_mantenimiento():
+        return PASA
+
+    if herramienta in HERRAMIENTAS_DE_ESCRITURA:
+        prefijo = ruta_protegida(str(datos.get("file_path", "")))
+        return _bloquear(_motivo(prefijo)) if prefijo else PASA
+
+    if herramienta in ("Bash", "PowerShell"):
+        comando = str(datos.get("command", ""))
+        if not any(token in comando for token in TOKENS_DE_ESCRITURA):
+            return PASA
+        for prefijo in ZONA_PROTEGIDA:
+            if prefijo in comando.replace("\\", "/"):
+                return _bloquear(
+                    _motivo(prefijo)
+                    + "\n(Detectado en un comando de shell: si solo estabas "
+                    "leyendo, reformúlalo sin operadores de escritura.)"
+                )
+
+    return PASA
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Hooks del arnés.")
-    parser.add_argument("evento", choices=("stop", "post-edit"))
+    parser.add_argument("evento", choices=("stop", "post-edit", "pre-tool-use"))
     parser.add_argument(
         "--tests-dir",
         default="tests",
@@ -176,6 +283,8 @@ def main(argv: list[str]) -> int:
 
     if args.evento == "stop":
         return evento_stop()
+    if args.evento == "pre-tool-use":
+        return evento_pre_tool_use()
     return evento_post_edit(args.tests_dir)
 
 

@@ -1,6 +1,18 @@
 {
-  "$schema_comment": "Hooks que automatizan la verificación del arnés. Los ejecuta Claude Code, no el agente. Para que un hook BLOQUEE hay que salir con exit 2 y escribir el motivo por stderr: con exit 1 la salida se muestra y la sesión sigue igual. De eso se ocupa scripts/harness_hook.py, que además funciona en Windows y en POSIX (antes eran comandos PowerShell y en Linux no corría nada). Ojo con el alcance: el matcher Edit|Write no cubre las escrituras hechas con Bash. Ver docs/scripts.md.",
+  "$schema_comment": "Hooks y permisos del arnés. Los hooks los ejecuta Claude Code, no el agente. Para que un hook BLOQUEE hay que salir con exit 2 y escribir el motivo por stderr: con exit 1 la salida se muestra y la sesión sigue igual. De eso se ocupa scripts/harness_hook.py, que además funciona en Windows y en POSIX. PreToolUse es el único que llega ANTES de la escritura; los otros dos llegan cuando ya ocurrió. En permisos, deny gana siempre sobre allow. Ver docs/scripts.md.",
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/harness_hook.py pre-tool-use",
+            "description": "Impide escribir en la capa que verifica el trabajo, salvo mantenimiento declarado."
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
@@ -26,14 +38,24 @@
     ]
   },
   "permissions": {
-    "allow": [
-      "PowerShell(./init.ps1*)",
+    "deny": [
       "PowerShell(./bootstrap.ps1*)",
+      "Bash(./bootstrap.ps1*)",
+      "Write(.git/**)",
+      "Edit(.git/**)"
+    ],
+    "allow": [
+      "PowerShell(./init.ps1)",
+      "PowerShell(./init.ps1 -Quiet)",
       "Bash(./init.sh)",
-      "Bash(python -m unittest*)",
-      "Bash(python3 -m unittest*)",
-      "Bash(python scripts/*)",
-      "Bash(python3 scripts/*)"
+      "Bash(./init.sh --quiet)",
+      "Bash(python scripts/validate_feature_list.py feature_list.json)",
+      "Bash(python scripts/validate_project_setup.py .)",
+      "Bash(python scripts/validate_requirements.py .)",
+      "Bash(python -m unittest discover -s tests -q)",
+      "Bash(python -m unittest discover -s tests -v)",
+      "Bash(python -m unittest discover -s scripts/tests -q)",
+      "Bash(python -m unittest discover -s scripts/tests -v)"
     ]
   }
 }
