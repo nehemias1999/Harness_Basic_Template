@@ -48,7 +48,9 @@
 - [ ] Si `src/` tiene módulos, `tests/` tiene al menos un test por módulo.
       (En un proyecto recién instanciado este checkbox no aplica todavía.)
 - [ ] La sección 6 del verificador muestra `[OK]`, no `[WARN]`: 0 tests
-      significa "sin verificar", no "verde".
+      significa "sin verificar", no "verde". Mientras no haya ninguna feature
+      cerrada es un aviso; en cuanto una está en `done`, la sección 4 lo
+      convierte en `[FAIL]`.
 - [ ] Los tests que tocan disco usan `tempfile.TemporaryDirectory()`, no mocks
       del filesystem ni rutas del usuario.
 - [ ] `python -m unittest discover -s tests -v` muestra > 0 tests y todos verdes.

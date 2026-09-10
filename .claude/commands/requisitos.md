@@ -22,6 +22,10 @@ son inertes, así que analizar y desarrollar conviven sin pisarse.
 4. **Relayas ese bloque literalmente**, sin añadir ni resumir, y le dices qué
    archivos abrir. No cuentes tú lo que dice el spec: si el humano pregunta,
    lees el archivo y citas.
+
+   Las preguntas abiertas son la parte que **no** puede quedarse en el disco:
+   el analyst no habla con el humano, así que si no las relayás vos, nadie las
+   hace. Pásalas tal cual, numeradas, antes de cualquier otra cosa.
 5. Esperas. Si agrega, modifica o saca algo → vuelves al paso 3 con una ronda
    más. Si da el OK → `/aprobar-requisitos`.
 

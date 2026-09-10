@@ -66,9 +66,13 @@
 3. Si no queda ninguna, para: no hay trabajo aprobado
 4. Ordena por prioridad: critica > alta > media > baja
 5. A igual prioridad, coge la de menor "id"
-6. Cambia su status a "in_progress" y guarda
-7. Anota en progress/current.md: feature, hora de inicio, plan breve
 ```
+
+**El cambio de estado lo hace quien trabaja, no quien coordina.** El
+`implementer` pone la feature en `in_progress` al tomarla y anota el plan en
+`progress/current.md`; el `leader` solo la pasa a `done`, y solo después de un
+`APPROVED`. Si dudas de cuál es la siguiente, no la calcules a ojo: el
+verificador la imprime en su sección 4.
 
 El orden lo fija `rules.orden_de_trabajo` en `feature_list.json`. La prioridad
 la hereda cada feature de su requisito, así que si te parece mal ordenada, lo

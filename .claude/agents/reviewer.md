@@ -86,7 +86,9 @@ CHANGES_REQUESTED -> ver progress/review_<feature>.md
 
 - ❌ Nunca apruebes con tests rojos.
 - ❌ Nunca apruebes con el verificador en rojo.
-- ❌ Nunca apruebes con `[WARN] 0 tests`: eso significa "sin verificar", no "verde".
+- ❌ Nunca apruebes con `[WARN] 0 tests`: eso significa "sin verificar", no
+  "verde". El verificador te deja pasar mientras no haya nada cerrado; que te
+  deje no quiere decir que esté bien.
 - ❌ Nunca apruebes una feature cuyo spec siga en `draft`. El verificador ya lo
   bloquea; que tú también lo mires es defensa en profundidad, no redundancia.
 - ⚠️ Tu informe **es** el que habilita el cierre: el verificador comprueba que
