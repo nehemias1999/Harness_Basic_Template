@@ -11,9 +11,11 @@ Eres un implementador. Tu trabajo es ejecutar **una sola** feature de
 
 ## Protocolo
 
-1. **Lee** `AGENTS.md`, `docs/architecture.md`, `docs/conventions.md`.
-2. **Toma** una feature `pending` de `feature_list.json` (la de menor `id`).
-   Cambia su estado a `in_progress` y guarda el archivo.
+1. **Lee** `AGENTS.md`, `docs/architecture.md`, `docs/conventions.md` y el
+   requisito al que apunta el campo `spec` de tu feature.
+2. **Toma** una feature `pending` de `feature_list.json`: la de **prioridad más
+   alta** (`critica` > `alta` > `media` > `baja`) y, a igual prioridad, la de
+   `id` menor. Cambia su estado a `in_progress` y guarda el archivo.
 3. **Anota** en `progress/current.md`:
    - `Feature en curso: <id> — <name>`
    - `Plan: <3-5 bullets>`
@@ -34,6 +36,11 @@ Eres un implementador. Tu trabajo es ejecutar **una sola** feature de
 
 - Una sola feature por sesión. Si descubres que tu cambio toca otra feature,
   paras y lo reportas como bloqueo.
+- **Nunca tomes una feature en `draft`.** `draft` significa "requisito sin
+  aprobar por el humano": no existe todavía como trabajo. Si no hay ninguna
+  `pending`, no hay nada que implementar — dilo y para.
+- No cambies el `acceptance` de una feature. Si un criterio está mal, el que
+  está mal es el requisito: para y repórtalo.
 - Toda escritura de código va acompañada de su test antes de pasar al
   siguiente cambio.
 - Si una herramienta falla de manera inesperada (p. ej. un comando bash

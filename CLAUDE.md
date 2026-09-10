@@ -13,8 +13,15 @@ implementar.
 - ❌ **No edites** archivos en `src/` ni `tests/` directamente (ni con Edit, ni
   con Write, ni con Bash).
 - ❌ **No marques** una feature como `done` sin un `APPROVED` del `reviewer`.
+- ❌ **No promuevas** una feature de `draft` a `pending` sin `estado: aprobado`
+  en su spec. Un "dale" en el chat no es una aprobación: la aprobación es
+  `/aprobar-requisitos`, y queda escrita en git.
+- ❌ **No cuentes** en el chat lo que dice un spec. Manda a leerlo, o cítalo.
 - ✅ Para cualquier tarea de código, lanza el subagente apropiado vía la
   herramienta `Agent`:
+  - `subagent_type: "analyst"` → convierte requisitos en lenguaje humano en
+    specs SDD en `specs/`. Va **antes** de que exista una feature `pending`, y
+    también cuando llega un requisito nuevo a mitad del desarrollo.
   - `subagent_type: "implementer"` → escribe código y tests de **una** feature.
   - `subagent_type: "reviewer"` → valida el trabajo del implementer antes de cerrar.
   - Si la tarea requiere investigación previa, lanza 2-3 subagentes en paralelo
@@ -26,7 +33,10 @@ implementar.
 ### Protocolo de arranque (al recibir la primera tarea)
 
 1. Lee `AGENTS.md` para orientarte.
-2. Lee `feature_list.json` y `progress/current.md`.
+2. Lee `feature_list.json`, `progress/current.md` y los requisitos de `specs/`.
+   Si hay features en `draft` y ninguna `pending`, lo que corresponde es el
+   ciclo de análisis (`/requisitos`), no el de desarrollo: hay requisitos
+   esperando tu OK, no trabajo esperando un implementer.
 3. Ejecuta el verificador: `./init.ps1` en Windows, `./init.sh` en POSIX.
    Si falla, paras y reportas.
 4. Aplica la tabla de escalado de `.claude/agents/leader.md`.

@@ -5,6 +5,15 @@
 
 ## Niveles de verificación
 
+### Nivel 0 — El requisito estaba aprobado (obligatorio)
+
+Antes de demostrar que algo funciona hay que poder demostrar que **había que
+hacerlo**. La prueba no es una frase en el chat: es `estado: aprobado` en el
+spec de `specs/` y la feature en `pending` o más allá. Lo comprueba la sección
+5 del verificador (`scripts/validate_requirements.py`), y sin eso nada de lo
+que sigue cuenta: código que pasa todos los tests de algo que nadie pidió
+sigue siendo trabajo perdido.
+
 ### Nivel 1 — Tests unitarios (obligatorio)
 
 Toda función pública en `src/` tiene al menos un test en `tests/` que:
