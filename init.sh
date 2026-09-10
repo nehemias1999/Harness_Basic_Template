@@ -97,7 +97,22 @@ else
 fi
 
 echo ""
-echo "── 5. Ejecutando tests ─────────────────────────────────"
+echo "── 5. Validando requisitos y trazabilidad ──────────────"
+
+# Bloqueante a propósito: la aprobación de un requisito no es un "dale" en el
+# chat, es `estado: aprobado` en specs/ mas la feature en `pending`. Mismo
+# módulo que usa init.ps1. Ver docs/scripts.md.
+if [ -f "scripts/validate_requirements.py" ]; then
+  if ! $PY scripts/validate_requirements.py .; then
+    EXIT_CODE=1
+  fi
+else
+  fail "Falta scripts/validate_requirements.py — no se puede verificar la trazabilidad"
+  EXIT_CODE=1
+fi
+
+echo ""
+echo "── 6. Ejecutando tests ─────────────────────────────────"
 
 if [ ! -d "tests" ]; then
   warn "La carpeta tests/ no existe todavía"
@@ -122,7 +137,7 @@ else
 fi
 
 echo ""
-echo "── 6. Resumen ──────────────────────────────────────────"
+echo "── 7. Resumen ──────────────────────────────────────────"
 
 if [ $EXIT_CODE -eq 0 ]; then
   ok "Entorno listo. Puedes empezar a trabajar."

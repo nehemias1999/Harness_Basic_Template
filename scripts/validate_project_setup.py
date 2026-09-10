@@ -10,10 +10,20 @@ Propósito
 Qué bloquea (`[FAIL]`)
     - `feature_list.json` todavía con el placeholder de `project`.
     - `docs/architecture.md` sin rellenar (placeholders `<...>` o la nota de
-      plantilla intacta).
+      plantilla intacta) **si ya hay alguna feature fuera de `draft`**.
     - `README.md` con placeholders sin sustituir.
 
+Por qué la arquitectura solo bloquea a veces
+    El borrador de `docs/architecture.md` lo escribe el agente `analyst` y lo
+    apruebas tú borrando su nota de plantilla. Mientras todas las features
+    están en `draft` nadie está programando, así que el borrador sin aprobar es
+    un `[WARN]`: si fuera `[FAIL]`, toda la fase de análisis correría en rojo y
+    el rojo dejaría de significar algo. En cuanto una feature sale de `draft`
+    vuelve a ser bloqueante, que es cuando importa: el reviewer necesita
+    criterio justo cuando hay código que juzgar.
+
 Qué solo avisa (`[WARN]`)
+    - `docs/architecture.md` en borrador mientras todo esté en `draft`.
     - `description` sin rellenar.
     - `feature_list.json` sin features.
     - `src/` sin módulos todavía.
@@ -102,19 +112,38 @@ def check(root: str) -> tuple[list[str], list[str], bool]:
         fails.append(f"No se pudo leer docs/architecture.md: {exc}")
         architecture = ""
 
+    architecture_issues: list[str] = []
     if architecture:
         placeholders = find_placeholders(architecture)
         if TEMPLATE_MARKER in architecture:
             architecture_unset = True
-            fails.append(
+            architecture_issues.append(
                 "docs/architecture.md sigue siendo la plantilla sin rellenar "
-                "(quita la nota inicial cuando lo hayas escrito)"
+                "(quita la nota inicial cuando la hayas leído y aprobado)"
             )
         if placeholders:
             architecture_unset = True
             shown = ", ".join(placeholders[:6])
             extra = f" (y {len(placeholders) - 6} más)" if len(placeholders) > 6 else ""
-            fails.append(f"docs/architecture.md tiene placeholders sin rellenar: {shown}{extra}")
+            architecture_issues.append(
+                f"docs/architecture.md tiene placeholders sin rellenar: {shown}{extra}"
+            )
+
+    # La arquitectura sin aprobar solo bloquea cuando ya hay trabajo real: si
+    # todo sigue en `draft` estamos en fase de análisis y el rojo sobraría.
+    hay_trabajo = any(
+        isinstance(f, dict) and f.get("status") not in (None, "draft")
+        for f in (features if isinstance(features, list) else [])
+    )
+    if architecture_issues:
+        if hay_trabajo:
+            fails.extend(architecture_issues)
+        else:
+            warns.extend(architecture_issues)
+            warns.append(
+                "docs/architecture.md es un borrador sin aprobar; todavía no bloquea "
+                "porque no hay ninguna feature fuera de draft"
+            )
 
     # --- README.md ----------------------------------------------------------
     try:
@@ -151,8 +180,9 @@ def main(argv: list[str]) -> int:
         print("")
         print('          ./bootstrap.ps1 -Name "mi-proyecto" -Description "Qué hace."')
         print("")
-        print("        Después rellena docs/architecture.md: es el documento contra el")
-        print("        que el reviewer juzga el código. Ver README.md § Arranque rápido.")
+        print("        Después pásale tus requisitos en lenguaje normal (/requisitos):")
+        print("        el analyst los deja en specs/ y redacta docs/architecture.md,")
+        print("        y tú los apruebas. Ver README.md § Arranque rápido.")
         return 1
 
     for warn in warns:

@@ -11,6 +11,7 @@
 | `bootstrap.ps1` | humano | una vez, al instanciar un proyecto nuevo desde la plantilla |
 | `scripts/validate_project_setup.py` | `init.*` (y a mano) | bloquea el arranque si el proyecto no está configurado |
 | `scripts/validate_feature_list.py` | `init.*` (y a mano) | siempre que haya que comprobar el alcance |
+| `scripts/validate_requirements.py` | `init.*` (y a mano) | bloquea si se está trabajando sobre un requisito sin aprobar |
 | `scripts/harness_test_hook.ps1` | hook `PostToolUse` | automático, tras cada Edit/Write |
 | `scripts/demo_orchestration.py` | humano o agente | para entender o demostrar el patrón anti-teléfono-descompuesto |
 
@@ -18,7 +19,7 @@
 
 ## `init.ps1` / `init.sh` — el verificador
 
-Son **el mismo verificador en dos plataformas**: misma estructura de 6 secciones,
+Son **el mismo verificador en dos plataformas**: misma estructura de 7 secciones,
 misma salida `[OK]/[WARN]/[FAIL]`, mismo exit code. Usa `init.ps1` en Windows y
 `init.sh` en WSL, macOS, Linux o CI. Si cambias uno, cambia el otro.
 
@@ -27,9 +28,14 @@ misma salida `[OK]/[WARN]/[FAIL]`, mismo exit code. Usa `init.ps1` en Windows y
 2. Archivos base      los 8 archivos sin los que el arnés no funciona
 3. Configuración      delega en scripts/validate_project_setup.py  (bloqueante)
 4. feature_list.json  delega en scripts/validate_feature_list.py
-5. Tests              descubre y ejecuta tests/
-6. Resumen            veredicto + exit code
+5. Requisitos         delega en scripts/validate_requirements.py   (bloqueante)
+6. Tests              descubre y ejecuta tests/
+7. Resumen            veredicto + exit code
 ```
+
+La 5 va **después** de la 4 a propósito: si `feature_list.json` está roto de
+forma, el lector ve primero el error de forma y no una cascada de errores de
+trazabilidad derivados de él.
 
 **Parámetros:** `init.sh` no tiene ninguno. `init.ps1` acepta `-Quiet` para
 resumir la salida de los tests.
@@ -61,7 +67,11 @@ Los `[WARN]` **no** bloquean; los `[FAIL]` sí.
 | `No se encontró un Python ejecutable` | instala Python >= 3.9 o arregla el PATH |
 | `Falta archivo base: X` | el arnés está incompleto: recupera `X` (ver `CHECKPOINTS.md` C1) |
 | `Este repositorio es la plantilla del arnés SIN INSTANCIAR` | ejecuta `./bootstrap.ps1 -Name "..."` |
-| `docs/architecture.md tiene placeholders sin rellenar` | escríbelo: es el criterio del reviewer, sin él no hay revisión posible |
+| `docs/architecture.md tiene placeholders sin rellenar` | pídeselo al `analyst` (`/requisitos`); es el criterio del reviewer, sin él no hay revisión posible |
+| `sigue en estado "draft" (nadie aprobó ese requisito)` | ejecuta `/aprobar-requisitos`, o devuelve la feature a `draft` |
+| `apunta a specs/... que no existe` | corrige el campo `spec` de la feature, o recupera el archivo |
+| `está aprobado pero ninguna feature lo referencia` | deriva sus features (`/requisitos`) o vuelve el spec a `draft` |
+| `y ningún requisito aprobado` | hay código sin alcance aprobado: define y aprueba los requisitos antes de seguir |
 | `Hay N features en in_progress` | cierra o revierte las features de más: una a la vez |
 | `No se pudieron descubrir los tests` | hay un error de import en `tests/`; ejecuta el discover a mano para verlo |
 | `Hay tests rotos` | arréglalos antes de seguir; no marques nada `done` |
@@ -181,6 +191,50 @@ Exit codes: `0` válido · `1` inválido. Imprime una línea `[FAIL]` por proble
 Existe como módulo aparte a propósito: `init.ps1` e `init.sh` lo invocan los dos,
 así que las reglas del alcance no se pueden desincronizar entre Windows y POSIX.
 El formato completo está descrito en `schema/feature_list.schema.json`.
+
+---
+
+## `scripts/validate_requirements.py` — no trabajar lo que nadie aprobó
+
+El otro gate del arnés. `validate_project_setup.py` exige que exista **criterio
+de calidad**; este exige que exista **alcance aprobado**.
+
+La razón de que sea un script y no una instrucción en un `.md`: la aprobación
+de un requisito tiene que sobrevivir a una ventana de contexto perdida. Por eso
+no vive en el chat, vive en dos archivos versionados — `estado: aprobado` en el
+frontmatter del spec y el `status` de sus features en `feature_list.json` — y
+este módulo comprueba que los dos concuerdan.
+
+```bash
+python scripts/validate_requirements.py           # el repo actual
+python scripts/validate_requirements.py ../otro
+```
+
+**Bloquea (`[FAIL]`)** cuando: una feature fuera de `draft` cuelga de un
+requisito sin aprobar; hay módulos en `src/` y ningún requisito aprobado; una
+feature no tiene `spec` o apunta a un archivo que no existe; un spec aprobado
+conserva preguntas abiertas, no tiene fecha de aprobación o no lo referencia
+ninguna feature; una feature tiene prioridad más alta que su requisito; o el
+nombre, el `id`, el `estado` o la `prioridad` de un spec están mal.
+
+**Solo avisa (`[WARN]`)** cuando: todavía no hay requisitos; hay requisitos en
+`draft` esperando el OK del humano; una aprobación quedó a medias; o hay una
+feature `in_progress` de menos prioridad que algo encolado — el arnés avisa del
+adelantamiento, pero **no interrumpe trabajo a medio escribir**: eso lo decide
+el humano.
+
+**Los archivos que empiezan por `_`** (`_plantilla_req.md`, `_entrada.md`) no
+son requisitos y se ignoran. Por eso la plantilla puede conservar sus
+`<placeholders>`.
+
+Exit codes: `0` la trazabilidad es coherente · `1` hay trabajo sin aprobar o la
+trazabilidad está rota.
+
+**Sus propios tests** están en `scripts/tests/`, no en `tests/`, y **no los
+ejecuta el verificador**: si estuvieran en `tests/`, un proyecto recién
+instanciado saldría verde con tests que no son suyos y el arnés dejaría de
+distinguir "sin verificar" de "verificado". Los corre `/harness-check`, o tú:
+`python -m unittest discover -s scripts/tests -v`.
 
 ---
 
