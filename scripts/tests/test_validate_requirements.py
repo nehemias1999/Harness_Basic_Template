@@ -93,6 +93,13 @@ class HarnessCase(unittest.TestCase):
             aprobado_el=aprobado_el,
             preguntas=preguntas,
         )
+        # Un spec aprobado lleva la huella de su contenido; la calcula
+        # /aprobar-requisitos al firmarlo. Como la huella ignora el
+        # frontmatter, añadir la línea no la cambia.
+        if estado == "aprobado" and "aprobado_hash:" not in content:
+            huella = vr.huella_del_spec(content)
+            cabecera, resto = content.split("\n---\n", 1)
+            content = f"{cabecera}\naprobado_hash: {huella}\n---\n{resto}"
         with open(os.path.join(self.root, "specs", name), "w", encoding="utf-8", newline="\n") as h:
             h.write(content)
 
@@ -380,6 +387,53 @@ class TestEscenariosAdversarios(HarnessCase):
         fails, _ = self.check()
         self.assertTrue(any("no coincide" in f for f in fails), fails)
         self.assertTrue(any("que no existe" in f for f in fails), fails)
+
+
+class TestHuellaDeLoAprobado(HarnessCase):
+    """Aprobar tiene que significar "aprobé *esto*", no "escribí la palabra"."""
+
+    def test_editar_un_spec_aprobado_se_detecta(self) -> None:
+        self.write_spec(estado="aprobado", aprobado_el="2026-09-10")
+        self.write_features([feature(status="pending")])
+        self.assertNoFails()
+
+        ruta = os.path.join(self.root, "specs", "REQ-001_un_requisito.md")
+        with open(ruta, encoding="utf-8") as handle:
+            contenido = handle.read()
+        with open(ruta, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(contenido + "\n## 5. Criterios\n\n1. Y además, borrar todo.\n")
+
+        self.assertFailsWith("cambió DESPUÉS de aprobarse")
+
+    def test_aprobado_sin_huella_falla(self) -> None:
+        self.write_spec(
+            body=(
+                "---\nid: REQ-001\ntitulo: T\nestado: aprobado\n"
+                "prioridad: alta\naprobado_el: 2026-09-10\n---\n# REQ-001\n"
+            )
+        )
+        self.write_features([feature(status="pending")])
+        self.assertFailsWith("no tiene aprobado_hash")
+
+    def test_tocar_la_bitacora_no_invalida_la_aprobacion(self) -> None:
+        # §7 y §8 cambian legítimamente después de aprobar.
+        self.write_spec(estado="aprobado", aprobado_el="2026-09-10")
+        self.write_features([feature(status="pending")])
+        ruta = os.path.join(self.root, "specs", "REQ-001_un_requisito.md")
+        with open(ruta, "a", encoding="utf-8", newline="\n") as handle:
+            handle.write("\n## 8. Bitácora\n\n| 2 | 2026-09-11 | se derivó otra feature |\n")
+        self.assertNoFails()
+
+    def test_la_huella_ignora_el_frontmatter(self) -> None:
+        cuerpo = "# T\n\n## 3. Alcance\n\nBuscar notas.\n"
+        uno = vr.huella_del_spec("---\nid: REQ-001\nestado: draft\n---\n" + cuerpo)
+        dos = vr.huella_del_spec("---\nid: REQ-001\nestado: aprobado\nronda: 9\n---\n" + cuerpo)
+        self.assertEqual(uno, dos)
+
+    def test_la_huella_ignora_espacios_al_final_de_linea(self) -> None:
+        uno = vr.huella_del_spec("---\na: b\n---\n## 3. Alcance\n\nAlgo.\n")
+        dos = vr.huella_del_spec("---\na: b\n---\n## 3. Alcance   \n\nAlgo.  \n")
+        self.assertEqual(uno, dos)
 
 
 class TestParserDeFrontmatter(unittest.TestCase):

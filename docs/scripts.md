@@ -205,9 +205,14 @@ ejecutable). Los nombres tienen que ser únicos porque los informes del
 implementer y del reviewer se llaman por el `name` de la feature: dos iguales se
 pisan el informe.
 
-También hace ejecutable `require_tests_to_close`: si hay alguna feature `done` y
-`tests/` no tiene ni un archivo de test, es un `[FAIL]`. Cerrar sin pruebas no es
-"verificado", es "nadie miró".
+También hace ejecutable el cierre de una feature. Para que una feature pueda
+estar en `done` tienen que existir sus dos informes —`progress/impl_<name>.md` y
+`progress/review_<name>.md`— y el del reviewer tiene que decir `APPROVED`; y
+`tests/` tiene que tener al menos un archivo de test (`require_tests_to_close`).
+Hasta ahora el ciclo decía "nadie se autoaprueba" pero **ningún código miraba
+nunca un veredicto**: bastaba con escribir `done` en el JSON. Esto no vuelve
+infalsificable el review —lo escribe un agente— pero obliga a que el artefacto
+exista y quede en git, que es lo que permite auditarlo después.
 
 Y cuando todo está en orden imprime **cuál es la siguiente feature** según el
 orden de trabajo, para que ese orden deje de depender de que cada agente
@@ -249,8 +254,21 @@ python scripts/validate_requirements.py           # el repo actual
 python scripts/validate_requirements.py ../otro
 ```
 
+**La huella de lo aprobado.** Al firmar un requisito, `/aprobar-requisitos`
+guarda en `aprobado_hash` una huella de su contenido, y el validador la
+recalcula en cada corrida. Sin eso, "aprobado" solo significaba que alguien
+escribió la palabra: editarle los criterios después no dejaba ni rastro, y el
+reviewer terminaba juzgando el código contra un texto que el humano nunca leyó.
+Quedan fuera de la huella §7 (features derivadas) y §8 (bitácora), que cambian
+legítimamente después. Para calcularla a mano:
+
+```bash
+python scripts/validate_requirements.py --huella specs/REQ-001_x.md
+```
+
 **Bloquea (`[FAIL]`)** cuando: una feature fuera de `draft` cuelga de un
-requisito sin aprobar; hay **código** en `src/` (recursivo, cualquier lenguaje) y
+requisito sin aprobar; un spec aprobado no tiene `aprobado_hash` o su contenido
+cambió después de aprobarse; hay **código** en `src/` (recursivo, cualquier lenguaje) y
 ningún requisito aprobado; una feature no tiene `spec` o apunta a un archivo que
 no existe; un spec aprobado conserva preguntas abiertas, no tiene fecha de
 aprobación o la fecha no es `AAAA-MM-DD`, o no lo referencia ninguna feature; una

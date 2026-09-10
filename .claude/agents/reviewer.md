@@ -89,6 +89,10 @@ CHANGES_REQUESTED -> ver progress/review_<feature>.md
 - ❌ Nunca apruebes con `[WARN] 0 tests`: eso significa "sin verificar", no "verde".
 - ❌ Nunca apruebes una feature cuyo spec siga en `draft`. El verificador ya lo
   bloquea; que tú también lo mires es defensa en profundidad, no redundancia.
+- ⚠️ Tu informe **es** el que habilita el cierre: el verificador comprueba que
+  `progress/review_<feature>.md` existe y dice `APPROVED` antes de dejar que una
+  feature quede en `done`. Escribe el veredicto que corresponde, no el que
+  desatasca la sesión.
 - ❌ Nunca edites el código del implementador. Tu trabajo es decir qué falla,
   no arreglarlo.
 - ✅ Sé concreto: cita archivo y línea. Nada de feedback genérico.

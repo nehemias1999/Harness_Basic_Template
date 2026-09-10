@@ -20,13 +20,16 @@
 ## C2 — El estado es coherente
 
 - [ ] Como mucho una feature en `in_progress` en `feature_list.json`.
-- [ ] Toda feature `done` tiene tests asociados que pasan.
+- [ ] Toda feature `done` tiene tests asociados que pasan, y sus dos informes
+      (`impl_` y `review_`) con veredicto `APPROVED`. Lo comprueba la sección 4
+      del verificador.
 - [ ] `progress/current.md` está vacío o describe la sesión activa
       (no contiene basura de sesiones anteriores).
 - [ ] `feature_list.json` ya no tiene el placeholder `<TU_PROYECTO>`.
 - [ ] Ninguna feature fuera de `draft` cuelga de un requisito sin aprobar.
 - [ ] Todo requisito `aprobado` tiene al menos una feature que lo referencia,
       y toda feature apunta a un `spec` que existe.
+- [ ] Ningún requisito aprobado cambió después de aprobarse (`aprobado_hash`).
 
 ## C3 — El código respeta la arquitectura
 
