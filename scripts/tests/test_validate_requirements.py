@@ -292,14 +292,112 @@ class TestPrioridad(HarnessCase):
         self.assertEqual(warns, [])
 
 
-class TestParserDeFrontmatter(unittest.TestCase):
-    def test_ignora_comentarios_al_final_de_la_linea(self) -> None:
-        fields = vr.parse_frontmatter("---\nestado: draft  # o aprobado\n---\n")
-        self.assertEqual(fields, {"estado": "draft"})
+class TestEscenariosAdversarios(HarnessCase):
+    """Los intentos de saltarse el gate que encontró la auditoría.
 
+    Todos estos pasaban antes. Están aquí para que no vuelvan.
+    """
+
+    def test_un_estado_inventado_no_escapa_del_gate(self) -> None:
+        # Ampliando rules.valid_status se podía inventar un estado que ningún
+        # validador miraba. Ahora todo lo que no es draft cuenta como trabajo.
+        self.write_spec()
+        self.write_features([feature(status="listo")])
+        self.assertFailsWith("nadie aprobó ese requisito")
+
+    def test_codigo_en_subcarpeta_de_src_tambien_cuenta(self) -> None:
+        self.write_spec()
+        self.write_features([feature()])
+        os.makedirs(os.path.join(self.root, "src", "paquete"))
+        with open(os.path.join(self.root, "src", "paquete", "mod.py"), "w") as handle:
+            handle.write("x = 1\n")
+        self.assertFailsWith("antes de definir qué había que hacer")
+
+    def test_codigo_que_no_es_python_tambien_cuenta(self) -> None:
+        self.write_spec()
+        self.write_features([feature()])
+        with open(os.path.join(self.root, "src", "app.ts"), "w") as handle:
+            handle.write("const x = 1\n")
+        self.assertFailsWith("antes de definir qué había que hacer")
+
+    def test_fecha_de_aprobacion_tiene_que_ser_una_fecha(self) -> None:
+        self.write_spec(estado="aprobado", aprobado_el="cuando sea")
+        self.write_features([feature(status="pending")])
+        self.assertFailsWith("tiene que ser una fecha")
+
+    def test_checkbox_dentro_de_un_bloque_de_codigo_no_bloquea(self) -> None:
+        self.write_spec(
+            estado="aprobado",
+            aprobado_el="2026-09-10",
+            preguntas="```\n- [ ] ejemplo de la plantilla\n```",
+        )
+        self.write_features([feature(status="pending")])
+        self.assertNoFails()
+
+    def test_checkbox_con_otra_grafia_igual_bloquea(self) -> None:
+        for grafia in ("- [  ] P1", "* [ ] P1", "+ [] P1"):
+            with self.subTest(grafia=grafia):
+                self.write_spec(
+                    estado="aprobado", aprobado_el="2026-09-10", preguntas=grafia
+                )
+                self.write_features([feature(status="pending")])
+                self.assertFailsWith("pregunta(s) abierta(s) sin responder")
+
+    def test_frontmatter_con_claves_repetidas_falla(self) -> None:
+        self.write_spec(
+            body=(
+                "---\nid: REQ-001\ntitulo: T\nestado: draft\n"
+                "estado: aprobado\nprioridad: alta\n---\n"
+            )
+        )
+        self.assertFailsWith("el frontmatter repite")
+
+    def test_spec_descartado_con_features_draft_avisa(self) -> None:
+        self.write_spec(estado="descartado")
+        self.write_features([feature(status="draft")])
+        fails, warns = self.check()
+        self.assertEqual(fails, [])
+        self.assertTrue(any("está descartado" in w for w in warns), warns)
+
+    def test_spec_descartado_con_feature_viva_falla(self) -> None:
+        self.write_spec(estado="descartado")
+        self.write_features([feature(status="in_progress")])
+        self.assertFailsWith("nadie aprobó ese requisito")
+
+    def test_feature_list_ilegible_no_calla_lo_de_specs(self) -> None:
+        self.write_spec(name="REQ-001 Mal Nombre.md")
+        with open(os.path.join(self.root, "feature_list.json"), "w") as handle:
+            handle.write("{ esto no es json")
+        fails, _ = self.check()
+        self.assertTrue(any("no sigue el formato" in f for f in fails), fails)
+        self.assertTrue(any("feature_list.json" in f for f in fails), fails)
+
+    def test_id_que_no_coincide_no_se_carga(self) -> None:
+        # Antes se reportaba el fallo pero el spec se seguía usando para
+        # trazabilidad, lo que daba diagnósticos contradictorios.
+        self.write_spec(spec_id="REQ-002")
+        self.write_features([feature()])
+        fails, _ = self.check()
+        self.assertTrue(any("no coincide" in f for f in fails), fails)
+        self.assertTrue(any("que no existe" in f for f in fails), fails)
+
+
+class TestParserDeFrontmatter(unittest.TestCase):
     def test_quita_comillas(self) -> None:
-        fields = vr.parse_frontmatter("---\ntitulo: \"Con comillas\"\n---\n")
+        fields, repetidas = vr.parse_frontmatter("---\ntitulo: \"Con comillas\"\n---\n")
         self.assertEqual(fields, {"titulo": "Con comillas"})
+        self.assertEqual(repetidas, [])
+
+    def test_no_trunca_un_titulo_con_almohadilla(self) -> None:
+        fields, _ = vr.parse_frontmatter("---\ntitulo: Arregla el bug #123\n---\n")
+        self.assertEqual(fields["titulo"], "Arregla el bug #123")
+
+    def test_reporta_claves_repetidas(self) -> None:
+        fields, repetidas = vr.parse_frontmatter(
+            "---\nestado: draft\nestado: aprobado\n---\n"
+        )
+        self.assertEqual(fields["estado"], "draft")
+        self.assertEqual(repetidas, ["estado"])
 
     def test_sin_apertura_devuelve_none(self) -> None:
         self.assertIsNone(vr.parse_frontmatter("# Solo un título\n"))

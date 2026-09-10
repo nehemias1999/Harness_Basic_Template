@@ -69,6 +69,10 @@ Los `[WARN]` **no** bloquean; los `[FAIL]` sí.
 | `Este repositorio es la plantilla del arnés SIN INSTANCIAR` | ejecuta `./bootstrap.ps1 -Name "..."` |
 | `docs/architecture.md tiene placeholders sin rellenar` | pídeselo al `analyst` (`/requisitos`); es el criterio del reviewer, sin él no hay revisión posible |
 | `sigue en estado "draft" (nadie aprobó ese requisito)` | ejecuta `/aprobar-requisitos`, o devuelve la feature a `draft` |
+| `"rules.…" vale … y el arnés trabaja con …` | alguien aflojó una regla del arnés editando `feature_list.json`: devuélvela a su valor |
+| `ni un solo test en tests/` | una feature `done` sin pruebas: escribe los tests o reabre la feature |
+| `aprobado_el … tiene que ser una fecha` | pon la fecha real de aprobación en formato `AAAA-MM-DD` |
+| `el frontmatter repite …` | hay dos veces la misma clave en el spec: deja una |
 | `apunta a specs/... que no existe` | corrige el campo `spec` de la feature, o recupera el archivo |
 | `está aprobado pero ninguna feature lo referencia` | deriva sus features (`/requisitos`) o vuelve el spec a `draft` |
 | `y ningún requisito aprobado` | hay código sin alcance aprobado: define y aprueba los requisitos antes de seguir |
@@ -177,9 +181,27 @@ Exit codes: `0` configurado · `1` falta configuración imprescindible.
 
 ## `scripts/validate_feature_list.py` — validar el alcance
 
-Comprueba `feature_list.json`: campos obligatorios, ids únicos, estados válidos,
-`acceptance` no vacío y **como mucho una feature `in_progress`** (la regla de "una
-feature a la vez" del arnés, hecha ejecutable).
+Comprueba `feature_list.json`: campos obligatorios, tipos, ids y **nombres**
+únicos, estados y prioridades válidos, `acceptance` no vacío y **como mucho una
+feature `in_progress`** (la regla de "una feature a la vez" del arnés, hecha
+ejecutable). Los nombres tienen que ser únicos porque los informes del
+implementer y del reviewer se llaman por el `name` de la feature: dos iguales se
+pisan el informe.
+
+También hace ejecutable `require_tests_to_close`: si hay alguna feature `done` y
+`tests/` no tiene ni un archivo de test, es un `[FAIL]`. Cerrar sin pruebas no es
+"verificado", es "nadie miró".
+
+Y cuando todo está en orden imprime **cuál es la siguiente feature** según el
+orden de trabajo, para que ese orden deje de depender de que cada agente
+interprete bien la regla.
+
+**Las reglas del arnés no se leen del JSON, se comprueban contra él.** `rules`
+describe cómo funciona el arnés, y ese archivo lo puede editar cualquier agente:
+leer de ahí el vocabulario de estados o el interruptor de "una feature a la vez"
+convertía la regla en una sugerencia — bastaba con ampliar `valid_status` o poner
+`one_feature_at_a_time: false` para que la feature dejara de ser vigilada. Si el
+JSON no coincide con las constantes del código, es un `[FAIL]` que lo dice.
 
 ```bash
 python scripts/validate_feature_list.py                  # feature_list.json
@@ -211,15 +233,22 @@ python scripts/validate_requirements.py ../otro
 ```
 
 **Bloquea (`[FAIL]`)** cuando: una feature fuera de `draft` cuelga de un
-requisito sin aprobar; hay módulos en `src/` y ningún requisito aprobado; una
-feature no tiene `spec` o apunta a un archivo que no existe; un spec aprobado
-conserva preguntas abiertas, no tiene fecha de aprobación o no lo referencia
-ninguna feature; una feature tiene prioridad más alta que su requisito; o el
-nombre, el `id`, el `estado` o la `prioridad` de un spec están mal.
+requisito sin aprobar; hay **código** en `src/` (recursivo, cualquier lenguaje) y
+ningún requisito aprobado; una feature no tiene `spec` o apunta a un archivo que
+no existe; un spec aprobado conserva preguntas abiertas, no tiene fecha de
+aprobación o la fecha no es `AAAA-MM-DD`, o no lo referencia ninguna feature; una
+feature tiene prioridad más alta que su requisito; el frontmatter repite claves;
+o el nombre, el `id`, el `estado` o la `prioridad` de un spec están mal.
+
+"Fuera de `draft`" se evalúa **por complemento**: cualquier estado que no sea
+`draft` cuenta como trabajo empezado. Con una lista blanca de estados, inventar
+uno nuevo bastaba para que la feature escapara del gate sin que ningún validador
+la mirase.
 
 **Solo avisa (`[WARN]`)** cuando: todavía no hay requisitos; hay requisitos en
-`draft` esperando el OK del humano; una aprobación quedó a medias; o hay una
-feature `in_progress` de menos prioridad que algo encolado — el arnés avisa del
+`draft` esperando el OK del humano; una aprobación quedó a medias; de un spec
+`descartado` todavía cuelgan features en `draft`; o hay una feature
+`in_progress` de menos prioridad que algo encolado — el arnés avisa del
 adelantamiento, pero **no interrumpe trabajo a medio escribir**: eso lo decide
 el humano.
 
@@ -230,8 +259,8 @@ son requisitos y se ignoran. Por eso la plantilla puede conservar sus
 Exit codes: `0` la trazabilidad es coherente · `1` hay trabajo sin aprobar o la
 trazabilidad está rota.
 
-**Sus propios tests** están en `scripts/tests/`, no en `tests/`, y **no los
-ejecuta el verificador**: si estuvieran en `tests/`, un proyecto recién
+**Los tests del arnés** —de este validador y de sus dos hermanos— están en
+`scripts/tests/`, no en `tests/`, y **no los ejecuta el verificador**: si estuvieran en `tests/`, un proyecto recién
 instanciado saldría verde con tests que no son suyos y el arnés dejaría de
 distinguir "sin verificar" de "verificado". Los corre `/harness-check`, o tú:
 `python -m unittest discover -s scripts/tests -v`.

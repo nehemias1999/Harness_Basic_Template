@@ -12,13 +12,17 @@ Propósito
 
 Qué bloquea (`[FAIL]`)
     - Una feature con `status` distinto de `draft` cuyo spec no está aprobado.
-    - Hay módulos en `src/` y ningún requisito aprobado: se empezó a programar
-      antes de definir qué había que hacer.
+      "Distinto de draft" se evalúa por complemento: inventar un estado nuevo
+      no es una forma de escaparse del gate.
+    - Hay código en `src/` (recursivo, cualquier lenguaje) y ningún requisito
+      aprobado: se empezó a programar antes de definir qué había que hacer.
     - Una feature sin campo `spec`, o apuntando a un archivo que no existe.
     - Un spec `aprobado` con preguntas abiertas sin responder (`- [ ]`): la
       regla de "no asumir nada", hecha ejecutable.
-    - Un spec `aprobado` sin `aprobado_el`, o sin ninguna feature que lo
-      referencie.
+    - Un spec `aprobado` sin `aprobado_el`, con una fecha que no es AAAA-MM-DD,
+      o sin ninguna feature que lo referencie.
+    - Un frontmatter con claves repetidas, o con un `id` que no coincide con el
+      nombre del archivo (ese spec no se carga).
     - Una feature con prioridad MÁS ALTA que la de su requisito. Bajarla es
       legal (una parte accesoria); subirla es una contradicción silenciosa.
     - Nombre de archivo fuera de `REQ-00N_nombre_snake_case.md`, `id` duplicado,
@@ -30,6 +34,7 @@ Qué solo avisa (`[WARN]`)
     - Hay requisitos en `draft` esperando el OK del humano.
     - Un spec aprobado cuyas features siguen todas en `draft` (aprobación a
       medias: falta terminar `/aprobar-requisitos`).
+    - Un spec `descartado` del que todavía cuelgan features en `draft`.
     - Hay una feature `in_progress` de menor prioridad que algo encolado. El
       arnés avisa del adelantamiento; decidir si se interrumpe es del humano.
 
@@ -54,15 +59,33 @@ import sys
 SPEC_DIR = "specs"
 SPEC_FILE_RE = re.compile(r"^REQ-(\d{3})_[a-z0-9]+(?:_[a-z0-9]+)*\.md$")
 SPEC_POINTER_RE = re.compile(r"^specs/REQ-\d{3}_[a-z0-9]+(?:_[a-z0-9]+)*\.md$")
-OPEN_QUESTION_RE = re.compile(r"^\s*-\s*\[ \]", re.MULTILINE)
+# Una pregunta sin responder es cualquier casilla vacía, escrita como sea:
+# "- [ ]", "- [  ]", "* []". Aceptar solo una grafía dejaba una salida trivial
+# para aprobar un requisito con huecos.
+OPEN_QUESTION_RE = re.compile(r"^\s*[-*+]\s*\[\s*\]", re.MULTILINE)
+FENCED_BLOCK_RE = re.compile(r"^\s*(?:```|~~~).*?^\s*(?:```|~~~)", re.MULTILINE | re.DOTALL)
+FECHA_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+# Extensiones que cuentan como "código de la aplicación" al comprobar que
+# nadie programó antes de tener un requisito aprobado. No es solo Python: la
+# plantilla es de Python, pero el arnés no tiene por qué serlo.
+CODE_EXT = (".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".rb",
+            ".cs", ".php", ".kt", ".swift", ".sh", ".ps1", ".sql")
 
 VALID_ESTADO = ("draft", "aprobado", "descartado")
 PRIORIDADES = ("critica", "alta", "media", "baja")
 REQUIRED_KEYS = ("id", "titulo", "estado", "prioridad")
 
-# Todo lo que no es `draft` significa que alguien ya trabajó sobre la feature.
-# `blocked` cuenta: para bloquearse hubo que empezar.
-WORKED_STATUS = ("pending", "in_progress", "done", "blocked")
+# Todo lo que NO es `draft` significa que alguien ya trabajó sobre la feature.
+# Se define por complemento y no como lista blanca a propósito: con una lista
+# blanca, inventar un estado nuevo en `rules.valid_status` bastaba para que la
+# feature escapara del gate sin que ningún validador la mirase.
+DRAFT = "draft"
+
+
+def es_trabajada(status: object) -> bool:
+    """Cualquier estado que no sea `draft` cuenta como trabajo empezado."""
+    return status is not None and status != DRAFT
 
 
 def _read(path: str) -> str:
@@ -70,30 +93,60 @@ def _read(path: str) -> str:
         return handle.read()
 
 
-def parse_frontmatter(text: str) -> dict[str, str] | None:
+def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]] | None:
     """Frontmatter YAML plano (`clave: valor`). None si no hay o no cierra.
 
-    Deliberadamente mínimo: el arnés no tiene dependencias externas, así que no
-    hay PyYAML. A cambio, la plantilla del spec obliga a claves planas.
+    Devuelve (campos, claves_repetidas). Deliberadamente mínimo: el arnés no
+    tiene dependencias externas, así que no hay PyYAML. A cambio, la plantilla
+    del spec obliga a claves planas.
+
+    No se interpreta `#` como comentario dentro del valor: un título legítimo
+    puede llevar almohadilla (`Arregla el bug #123`) y truncarlo en silencio es
+    peor que no soportar comentarios inline.
     """
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return None
 
     fields: dict[str, str] = {}
+    repetidas: list[str] = []
     for line in lines[1:]:
         if line.strip() == "---":
-            return fields
+            return fields, repetidas
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         if ":" not in line:
             continue
         key, _, value = line.partition(":")
         key = key.strip()
-        value = value.split(" #")[0].strip().strip("\"'")
-        if key and key not in fields:
-            fields[key] = value
+        value = value.strip().strip("\"'")
+        if not key:
+            continue
+        if key in fields:
+            repetidas.append(key)
+            continue
+        fields[key] = value
     return None
+
+
+def contar_codigo(src_dir: str) -> int:
+    """Archivos de código bajo `src/`, recursivamente.
+
+    Recursivo y multi-lenguaje a propósito: mirar solo `src/*.py` dejaba ciego
+    al arnés ante `src/paquete/modulo.py` y ante cualquier proyecto que no
+    fuera Python.
+    """
+    total = 0
+    if not os.path.isdir(src_dir):
+        return 0
+    for carpeta, dirs, archivos in os.walk(src_dir):
+        dirs[:] = [d for d in dirs if d not in ("__pycache__", ".venv", "node_modules")]
+        for archivo in archivos:
+            if archivo == "__init__.py":
+                continue
+            if archivo.endswith(CODE_EXT):
+                total += 1
+    return total
 
 
 def prioridad_rank(prioridad: str) -> int:
@@ -126,10 +179,17 @@ def load_specs(root: str) -> tuple[dict[str, dict], list[str]]:
             )
             continue
 
-        fields = parse_frontmatter(_read(os.path.join(spec_dir, name)))
-        if fields is None:
+        contenido = _read(os.path.join(spec_dir, name))
+        parsed = parse_frontmatter(contenido)
+        if parsed is None:
             fails.append(f"{rel}: no tiene frontmatter, o no está cerrado con ---")
             continue
+        fields, repetidas = parsed
+        if repetidas:
+            fails.append(
+                f"{rel}: el frontmatter repite {', '.join(sorted(set(repetidas)))}. "
+                f"Con claves duplicadas no se sabe cuál vale: deja una sola"
+            )
 
         missing = [key for key in REQUIRED_KEYS if not fields.get(key)]
         if missing:
@@ -140,8 +200,10 @@ def load_specs(root: str) -> tuple[dict[str, dict], list[str]]:
         if spec_id != f"REQ-{match.group(1)}":
             fails.append(
                 f"{rel}: el id del frontmatter ({spec_id}) no coincide con el "
-                f"del nombre del archivo (REQ-{match.group(1)})"
+                f"del nombre del archivo (REQ-{match.group(1)}). No se carga: "
+                f"arregla uno de los dos antes de seguir"
             )
+            continue
         if spec_id in seen_ids:
             fails.append(f"{rel}: id {spec_id} duplicado (ya lo usa {seen_ids[spec_id]})")
         seen_ids[spec_id] = rel
@@ -158,8 +220,10 @@ def load_specs(root: str) -> tuple[dict[str, dict], list[str]]:
             )
 
         fields["_ruta"] = rel
+        # Se ignoran los bloques de código: un checkbox de ejemplo dentro de
+        # unas comillas triples no es una pregunta sin responder.
         fields["_preguntas_abiertas"] = len(
-            OPEN_QUESTION_RE.findall(_read(os.path.join(spec_dir, name)))
+            OPEN_QUESTION_RE.findall(FENCED_BLOCK_RE.sub("", contenido))
         )
         specs[rel] = fields
 
@@ -190,12 +254,17 @@ def check(root: str) -> tuple[list[str], list[str]]:
         data = json.loads(_read(os.path.join(root, "feature_list.json")))
     except (OSError, json.JSONDecodeError):
         # No duplicamos el diagnóstico: de la forma del archivo se ocupa la
-        # sección anterior del verificador.
-        return ["No se pudo leer feature_list.json (ver sección 4)"], warns
+        # sección anterior del verificador. Pero seguimos: lo que se pueda
+        # decir de specs/ vale igual, y callarlo dejaría al humano arreglando
+        # los problemas de a uno.
+        fails.append("No se pudo leer feature_list.json (ver sección 4)")
+        data = {}
 
     features = data.get("features")
     if not isinstance(features, list):
-        return ["\"features\" no es un array (ver sección 4)"], warns
+        if data:
+            fails.append("\"features\" no es un array (ver sección 4)")
+        features = []
 
     referenced: dict[str, list[dict]] = {}
     for feature in features:
@@ -226,7 +295,7 @@ def check(root: str) -> tuple[list[str], list[str]]:
 
         referenced.setdefault(spec_path, []).append(feature)
 
-        if status in WORKED_STATUS and spec["estado"] != "aprobado":
+        if es_trabajada(status) and spec["estado"] != "aprobado":
             fails.append(
                 f"{label}: status \"{status}\" pero {spec_path} sigue en estado "
                 f"\"{spec['estado']}\" (nadie aprobó ese requisito)"
@@ -251,12 +320,31 @@ def check(root: str) -> tuple[list[str], list[str]]:
         if estado == "draft":
             en_draft.append(f"{spec['id']} [{spec['prioridad']}]")
             continue
+        if estado == "descartado":
+            # Las features que ya salieron de draft las agarra el gate de
+            # arriba. Las que siguen en draft son alcance zombi: nadie las va a
+            # implementar y nadie las va a echar de menos hasta que estorben.
+            vivas = [f for f in suyas if f.get("status") == DRAFT]
+            if vivas:
+                nombres = ", ".join(str(f.get("id")) for f in vivas)
+                warns.append(
+                    f"{rel}: está descartado pero todavía cuelgan de él "
+                    f"{len(vivas)} feature(s) en draft (id {nombres}): bórralas "
+                    f"o muévelas a otro requisito"
+                )
+            continue
         if estado != "aprobado":
             continue
 
         aprobados += 1
-        if not spec.get("aprobado_el"):
+        fecha = spec.get("aprobado_el", "")
+        if not fecha:
             fails.append(f"{rel}: está aprobado pero le falta la fecha en aprobado_el")
+        elif not FECHA_RE.match(fecha):
+            fails.append(
+                f"{rel}: aprobado_el vale \"{fecha}\" y tiene que ser una fecha "
+                f"AAAA-MM-DD. Una aprobación sin fecha real no sirve como traza"
+            )
         if spec["_preguntas_abiertas"]:
             fails.append(
                 f"{rel}: está aprobado con {spec['_preguntas_abiertas']} pregunta(s) "
@@ -281,14 +369,11 @@ def check(root: str) -> tuple[list[str], list[str]]:
         )
 
     # --- no se programa sin requisitos --------------------------------------
-    src_dir = os.path.join(root, "src")
-    modules = []
-    if os.path.isdir(src_dir):
-        modules = [f for f in os.listdir(src_dir) if f.endswith(".py") and f != "__init__.py"]
+    modules = contar_codigo(os.path.join(root, "src"))
     if modules and aprobados == 0:
         fails.append(
-            f"hay {len(modules)} módulo(s) en src/ y ningún requisito aprobado: "
-            f"se empezó a programar antes de definir qué había que hacer"
+            f"hay {modules} archivo(s) de código en src/ y ningún requisito "
+            f"aprobado: se empezó a programar antes de definir qué había que hacer"
         )
 
     # --- adelantamiento por prioridad ---------------------------------------
