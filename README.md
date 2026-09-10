@@ -163,6 +163,7 @@ cuanto el subagente termina. Así auditas paso a paso quién decidió qué.
 
 ```
 .
+├── .github/workflows/harness.yml    # CI: el arnés se verifica a sí mismo
 ├── AGENTS.md                        # Mapa para agentes (divulgación progresiva)
 ├── CLAUDE.md                        # Fuerza el rol `leader` en cada sesión
 ├── CHECKPOINTS.md                   # Criterios de "estado final correcto"
@@ -214,6 +215,9 @@ cuanto el subagente termina. Así auditas paso a paso quién decidió qué.
   `in_progress` en `feature_list.json`), y por prioridad: primero lo crítico.
 - **Estado en disco**, no en chat: `progress/current.md` y `history.md`
   sobreviven a reinicios y context windows reventadas.
+- **Un control que nadie ejecuta no es un control**: por eso los tests del
+  propio arnés y la paridad entre `init.ps1` e `init.sh` corren en CI, y no
+  cuando alguien se acuerda.
 - **Verificación ejecutable**: el verificador corre los tests reales, no se fía
   de lo que diga el agente. Y distingue "0 tests" de "todo verde" — un repo sin
   tests no está verificado, aunque `unittest` salga con éxito.
