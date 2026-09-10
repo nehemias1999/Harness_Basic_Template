@@ -3,15 +3,30 @@
 #
 # Propósito : comprobar que el repositorio está en un estado sano antes de
 #             trabajar y antes de declarar cualquier feature como `done`.
-# Lo ejecuta: el agente al COMENZAR una sesión, el hook `Stop` al cerrarla, y
+# Lo ejecuta: el agente al COMENZAR una sesión, el hook `Stop` (vía
+#             scripts/harness_hook.py) al cerrarla, y
 #             el reviewer antes de emitir su veredicto. Si falla, la sesión no avanza.
 # Equivalente: ./init.ps1 (canónico en Windows; misma salida y mismo exit code).
-# Parámetros : ninguno.
-# Uso        : ./init.sh
+# Parámetros : --quiet  resume la salida de los tests (equivale a -Quiet de init.ps1).
+# Uso        : ./init.sh [--quiet]
 # Salida     : bloques numerados con líneas [OK] / [WARN] / [FAIL].
 # Exit codes : 0 entorno listo (los [WARN] no bloquean) · 1 hay algo que resolver.
 
 set -u
+
+# Como init.ps1: el verificador se planta en la raíz del repositorio. Sin esto,
+# ejecutarlo desde otro directorio reportaba los 8 archivos base como
+# "faltantes" en vez de verificar lo que había que verificar.
+cd "$(dirname "$0")" || exit 1
+
+QUIET=0
+for arg in "$@"; do
+  case "$arg" in
+    --quiet) QUIET=1 ;;
+    *) printf "Parámetro desconocido: %s (solo --quiet)
+" "$arg" >&2; exit 1 ;;
+  esac
+done
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -119,7 +134,14 @@ if [ ! -d "tests" ]; then
 else
   # Contar antes de ejecutar: un discover sin tests devuelve 0 y no debe
   # confundirse con "todo verde". Un repo recién instanciado avisa, no falla.
-  TEST_COUNT=$($PY -c 'import unittest; print(unittest.TestLoader().discover("tests").countTestCases())' 2>/dev/null || echo "-1")
+  # Se compara el exit code del conteo en vez de su salida: si Python imprime
+  # algo antes de fallar, una comparación de cadenas mandaría al verificador a
+  # ejecutar tests que no se pudieron ni descubrir (init.ps1 ya miraba el code).
+  if TEST_COUNT=$($PY -c 'import unittest; print(unittest.TestLoader().discover("tests").countTestCases())' 2>/dev/null); then
+    :
+  else
+    TEST_COUNT="-1"
+  fi
 
   if [ "$TEST_COUNT" = "-1" ]; then
     fail "No se pudieron descubrir los tests (¿error de import en tests/?)"
@@ -127,7 +149,12 @@ else
   elif [ "$TEST_COUNT" = "0" ]; then
     warn "0 tests en tests/ — el arnés no está verificando nada todavía"
   else
-    if $PY -m unittest discover -s tests -v 2>&1; then
+    if [ "$QUIET" -eq 1 ]; then
+      TEST_FLAG="-q"
+    else
+      TEST_FLAG="-v"
+    fi
+    if $PY -m unittest discover -s tests "$TEST_FLAG" 2>&1; then
       ok "Todos los tests pasan ($TEST_COUNT tests)"
     else
       fail "Hay tests rotos"

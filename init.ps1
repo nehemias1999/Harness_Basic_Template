@@ -6,7 +6,8 @@
     Comprueba que el repositorio está en un estado sano antes de trabajar y
     antes de declarar cualquier feature como `done`.
 
-    Lo ejecuta el agente al COMENZAR una sesión, el hook `Stop` al cerrarla y
+    Lo ejecuta el agente al COMENZAR una sesión, el hook `Stop` (a través de
+    scripts/harness_hook.py) al cerrarla y
     el reviewer antes de emitir su veredicto. Si falla, la sesión no avanza.
 
     Equivalente POSIX: ./init.sh (misma salida y mismo exit code).

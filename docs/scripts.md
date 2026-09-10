@@ -12,7 +12,7 @@
 | `scripts/validate_project_setup.py` | `init.*` (y a mano) | bloquea el arranque si el proyecto no está configurado |
 | `scripts/validate_feature_list.py` | `init.*` (y a mano) | siempre que haya que comprobar el alcance |
 | `scripts/validate_requirements.py` | `init.*` (y a mano) | bloquea si se está trabajando sobre un requisito sin aprobar |
-| `scripts/harness_test_hook.ps1` | hook `PostToolUse` | automático, tras cada Edit/Write |
+| `scripts/harness_hook.py` | hooks `PostToolUse` y `Stop` | automático; bloquean con exit 2 |
 | `scripts/demo_orchestration.py` | humano o agente | para entender o demostrar el patrón anti-teléfono-descompuesto |
 
 ---
@@ -267,28 +267,43 @@ distinguir "sin verificar" de "verificado". Los corre `/harness-check`, o tú:
 
 ---
 
-## `scripts/harness_test_hook.ps1` — feedback tras cada edición
+## `scripts/harness_hook.py` — los hooks, y por qué bloquean
 
-Lo invoca el hook `PostToolUse` de `.claude/settings.json`: cada vez que un
-agente escribe o edita un archivo, Claude Code ejecuta este script y le devuelve
-el resultado de los tests. No es opcional para el agente — lo dispara el arnés,
-no él.
+Los dos hooks de `.claude/settings.json` viven aquí:
 
-```powershell
-./scripts/harness_test_hook.ps1              # a mano, para probarlo
-./scripts/harness_test_hook.ps1 -TestsDir tests
+```bash
+python scripts/harness_hook.py stop                  # antes de cerrar el turno
+python scripts/harness_hook.py post-edit             # tras cada Edit/Write
+python scripts/harness_hook.py post-edit --tests-dir tests
 ```
 
-Exit codes: `0` tests verdes **o** sin tests todavía · `1` tests rotos.
+Exit codes: `0` todo en orden (o no hay nada que verificar todavía) · **`2`
+bloquea**.
 
-Está en un archivo aparte y no en un one-liner dentro de `settings.json` por un
-motivo concreto: `unittest discover` sobre una carpeta sin tests sale con **exit
-code 1** ("NO TESTS RAN"), así que en un proyecto recién instanciado el hook
-fallaría en cada edición y el agente vería un error en cada paso. El script
-cuenta primero y solo falla cuando hay tests y están rotos.
+**El 2 es el punto entero de este archivo.** Un hook que sale con 1 no bloquea
+nada: Claude Code muestra la salida y la sesión sigue igual. Los hooks del arnés
+salían con 1, así que durante un tiempo el repositorio afirmaba que no se podían
+saltar mientras la sesión cerraba tranquilamente con el verificador en rojo. Con
+exit 2 el turno no cierra, y el motivo —que va por **stderr**, no por stdout— se
+le devuelve al modelo como algo que tiene que resolver.
 
-Es feedback rápido, **no** la verificación oficial: esa sigue siendo `init.ps1`,
-que además comprueba archivos base y alcance.
+`stop` corre el verificador entero; `post-edit` cuenta los tests y, si hay,
+los ejecuta. Cuenta antes de ejecutar porque `unittest discover` sobre una
+carpeta vacía sale con error ("NO TESTS RAN") y un proyecto recién instanciado
+vería un fallo en cada edición.
+
+**El bucle.** Claude Code vuelve a llamar al hook `stop` después de que el
+agente reacciona. Si bloqueara siempre, la sesión no cerraría nunca: por eso se
+respeta `stop_hook_active`, que avisa de que ya venimos de un bloqueo. Y ojo:
+`stop` **no se dispara si interrumpes con Ctrl+C**.
+
+**Lo que los hooks no cubren.** El matcher es `Edit|Write`: una escritura hecha
+con `Bash` (`python -c "open(...)"`, `echo >`) no dispara nada. Los hooks son
+una red, no una jaula.
+
+Es Python y no PowerShell para que funcione igual en Windows y en POSIX: la
+versión anterior era PowerShell puro y en WSL o Linux no corría en absoluto.
+Internamente elige `init.ps1` o `init.sh` según el sistema.
 
 ---
 

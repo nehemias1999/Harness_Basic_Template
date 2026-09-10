@@ -74,7 +74,7 @@ a `feature_list.json` tú mismo. El arnés valida lo mismo en los dos casos.
 | `scripts/validate_project_setup.py` | `init.*` (y a mano) | bloquea el arranque si el proyecto no está configurado |
 | `scripts/validate_requirements.py` | `init.*` (y a mano) | bloquea si se trabaja sobre un requisito sin aprobar |
 | `scripts/validate_feature_list.py` | `init.*` (y a mano) | para comprobar el alcance |
-| `scripts/harness_test_hook.ps1` | hook `PostToolUse` | automático, tras cada Edit/Write |
+| `scripts/harness_hook.py` | hooks `PostToolUse` y `Stop` | automático; bloquean con exit 2 |
 | `scripts/demo_orchestration.py` | humano o agente | para ver el patrón anti-teléfono-descompuesto en acción |
 
 Parámetros, exit codes y qué hacer cuando cada uno falla: **`docs/scripts.md`**.
@@ -85,9 +85,14 @@ Parámetros, exit codes y qué hacer cuando cada uno falla: **`docs/scripts.md`*
 secciones, misma salida `[OK]/[WARN]/[FAIL]`, mismo exit code. Usa el `.ps1` en
 Windows y el `.sh` en WSL, macOS, Linux o CI. Si tocas uno, toca el otro.
 
-Los hooks de `.claude/settings.json` están escritos en PowerShell porque la
-plantilla es canónica en Windows. Para usarla en Linux, cambia en ese archivo
-`powershell -File ./init.ps1` por `./init.sh` y `python` por `python3`.
+Los hooks de `.claude/settings.json` ya no dependen de la plataforma: son
+`python scripts/harness_hook.py`, y el script elige `init.ps1` o `init.sh`
+según el sistema. Lo único que puede hacer falta cambiar en Linux es el nombre
+del intérprete (`python` → `python3`) si tu distribución no expone `python`.
+
+Esos hooks **bloquean**: salen con exit 2, así que el turno no cierra con el
+verificador en rojo ni con los tests rotos. Lo que no cubren es una escritura
+hecha con `Bash` en vez de con Edit/Write — son una red, no una jaula.
 
 ## El ciclo de trabajo
 
@@ -179,7 +184,7 @@ cuanto el subagente termina. Así auditas paso a paso quién decidió qué.
 │   ├── validate_feature_list.py     # Valida el alcance (lo usan init.ps1 e init.sh)
 │   ├── validate_requirements.py     # Valida requisito -> feature (íd.)
 │   ├── tests/                       # Tests del propio arnés (no los corre init.*)
-│   ├── harness_test_hook.ps1        # Tests tras cada edición (hook PostToolUse)
+│   ├── harness_hook.py              # Los hooks: tests tras cada edición y verificador al cerrar
 │   └── demo_orchestration.py        # Demo del patrón Líder-Trabajador
 ├── .claude/
 │   ├── agents/                      # analyst, leader, implementer, reviewer
