@@ -4,21 +4,24 @@
   "rules": {
     "one_feature_at_a_time": true,
     "require_tests_to_close": true,
-    "valid_status": ["pending", "in_progress", "done", "blocked"]
+    "orden_de_trabajo": "prioridad_luego_id",
+    "valid_status": ["draft", "pending", "in_progress", "done", "blocked"]
   },
   "_example": {
-    "_comment": "Plantilla de una feature. Copia este objeto dentro de \"features\", quítale el prefijo _ y rellénalo. El campo acceptance es lo que el reviewer usa para aprobar o rechazar: escríbelo como criterios verificables, no como deseos.",
+    "_comment": "Plantilla de una feature. Normalmente NO la escribes tú: la deriva el agente analyst desde un requisito de specs/ (usa /requisitos). Los criterios de acceptance salen uno a uno de la sección 5 de su spec. Una feature nace en draft y solo pasa a pending cuando apruebas el requisito con /aprobar-requisitos: el implementer nunca toca una draft.",
     "id": 1,
     "name": "nombre_corto_snake_case",
     "title": "Título legible de la feature",
     "description": "Qué hace y por qué, en 1-2 frases.",
+    "spec": "specs/REQ-001_nombre_del_requisito.md",
+    "prioridad": "alta",
     "acceptance": [
       "Existe src/<modulo>.py con la función <nombre>()",
       "<comando concreto> produce <salida concreta>",
       "Devuelve exit code != 0 y mensaje en stderr si <caso de error>",
       "tests/test_<modulo>.py cubre camino feliz y al menos un camino de error"
     ],
-    "status": "pending"
+    "status": "draft"
   },
   "features": []
 }

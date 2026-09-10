@@ -3,10 +3,14 @@
 Propósito
     Comprobar que el alcance del proyecto está en un estado coherente antes de
     dejar avanzar una sesión: estados válidos, como mucho una feature
-    `in_progress`, ids únicos y campos obligatorios presentes.
+    `in_progress`, ids únicos, prioridad válida y campos obligatorios presentes.
+
+    Este módulo mira solo la FORMA del alcance. La relación de cada feature con
+    el requisito del que sale (specs/) la comprueba scripts/validate_requirements.py:
+    un error, una causa.
 
 Quién lo ejecuta
-    `init.ps1` e `init.sh` (sección 3). Ambos llaman a este mismo módulo para
+    `init.ps1` e `init.sh` (sección 4). Ambos llaman a este mismo módulo para
     que la lógica de validación no se duplique ni se desincronice entre
     Windows y POSIX. También puedes ejecutarlo a mano.
 
@@ -25,8 +29,18 @@ from __future__ import annotations
 import json
 import sys
 
-VALID_STATUS = {"pending", "in_progress", "done", "blocked"}
-REQUIRED_FEATURE_KEYS = ("id", "name", "title", "description", "acceptance", "status")
+VALID_STATUS = {"draft", "pending", "in_progress", "done", "blocked"}
+VALID_PRIORIDAD = ("critica", "alta", "media", "baja")
+REQUIRED_FEATURE_KEYS = (
+    "id",
+    "name",
+    "title",
+    "description",
+    "spec",
+    "prioridad",
+    "acceptance",
+    "status",
+)
 
 
 def validate(path: str) -> list[str]:
@@ -76,6 +90,11 @@ def validate(path: str) -> list[str]:
         status = feature.get("status")
         if status is not None and status not in allowed:
             errors.append(f"{label}: estado inválido \"{status}\"")
+
+        prioridad = feature.get("prioridad")
+        if prioridad is not None and prioridad not in VALID_PRIORIDAD:
+            valid = ", ".join(VALID_PRIORIDAD)
+            errors.append(f"{label}: prioridad inválida \"{prioridad}\" (usa: {valid})")
 
         acceptance = feature.get("acceptance")
         if acceptance is not None and (not isinstance(acceptance, list) or not acceptance):
