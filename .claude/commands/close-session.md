@@ -16,10 +16,15 @@ orden y reporta cada paso:
    formato que documenta ese archivo (fecha, feature, agente, resultado,
    archivos tocados, verificación, notas).
 4. **Reset.** Vacía `progress/current.md` dejando solo la plantilla.
-5. **Limpieza.** Revisa `git status`: sin `*.tmp`, sin `__pycache__` fuera del
+5. **Ronda de análisis a medias.** Si hay requisitos en `draft`, dilo antes de
+   cerrar: el humano decide entre aprobarlos (`/aprobar-requisitos`) o dejarlos
+   para la próxima sesión. Un `draft` sobrevive perfectamente al cierre — lo
+   que no puede pasar es que se cierre en silencio y nadie se acuerde de que
+   había algo esperando su OK.
+6. **Limpieza.** Revisa `git status`: sin `*.tmp`, sin `__pycache__` fuera del
    `.gitignore`, sin `print()` de debug ni TODOs sin contexto.
-6. **Resumen final** en 3-5 líneas: qué se cerró, qué queda pendiente y cuál es
+7. **Resumen final** en 3-5 líneas: qué se cerró, qué queda pendiente y cuál es
    el primer paso de la próxima sesión.
 
 **Archivos que toca:** `feature_list.json`, `progress/current.md`,
-`progress/history.md`. Nunca `src/` ni `tests/`.
+`progress/history.md`. Nunca `src/`, `tests/` ni `specs/`.

@@ -11,14 +11,17 @@
          en docs/architecture.md, conventions.md y verification.md.
       3. Resetea `progress/current.md` y `progress/history.md` a su plantilla.
       4. Borra informes de sesiones anteriores (`progress/explore_*.md`,
-         `impl_*.md`, `review_*.md`) si quedara alguno.
+         `impl_*.md`, `review_*.md`, `intake_*.md`) si quedara alguno.
+      5. Crea `specs/` y borra los requisitos del proyecto anterior
+         (`specs/REQ-*.md`), que ya no tienen features a las que apuntar.
 
     Lo ejecuta un humano UNA vez, justo después de copiar la plantilla. Es
     idempotente: volver a ejecutarlo con otro nombre solo reescribe el nombre.
 
-    Lo que NO hace: escribir `docs/architecture.md` por ti. Ese archivo define
-    qué significa "hacer un buen trabajo" en tu proyecto y es lo primero que
-    tienes que rellenar a mano; el script te lo recuerda al terminar.
+    Lo que NO hace: definir el alcance por ti. El borrador de
+    `docs/architecture.md` y los requisitos los redacta el agente `analyst`
+    (`/requisitos`), pero **aprobarlos es tuyo** y hasta que lo hagas el
+    verificador no se pone verde. El script te lo recuerda al terminar.
 
 .PARAMETER Name
     Nombre del proyecto nuevo (obligatorio).
@@ -210,12 +213,33 @@ if ($PSCmdlet.ShouldProcess("progress/current.md", "reiniciar a la plantilla")) 
 
 # 4. Informes residuales ----------------------------------------------------
 $reports = Get-ChildItem -Path "progress" -File -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -match "^(explore|impl|review)_.*\.md$" }
+    Where-Object { $_.Name -match "^(explore|impl|review|intake)_.*\.md$" }
 
 foreach ($report in $reports) {
     if ($PSCmdlet.ShouldProcess("progress/$($report.Name)", "borrar informe de una sesión anterior")) {
         Remove-Item -LiteralPath $report.FullName -Force
         Write-Ok "progress/$($report.Name) -> borrado"
+    }
+}
+
+# 4bis. Requisitos ---------------------------------------------------------
+# Los requisitos son del proyecto anterior. Si se quedan, el paso 1 vacía
+# `features` y quedan specs aprobados sin ninguna feature que los referencie:
+# la sección 5 del verificador sale en rojo apenas termina el bootstrap.
+if (-not (Test-Path -LiteralPath "specs" -PathType Container)) {
+    if ($PSCmdlet.ShouldProcess("specs/", "crear la carpeta de requisitos")) {
+        New-Item -ItemType Directory -Path "specs" | Out-Null
+        Write-Ok "specs/ -> creada"
+    }
+}
+
+$oldSpecs = Get-ChildItem -Path "specs" -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match "^REQ-\d{3}_.*\.md$" }
+
+foreach ($spec in $oldSpecs) {
+    if ($PSCmdlet.ShouldProcess("specs/$($spec.Name)", "borrar requisito del proyecto anterior")) {
+        Remove-Item -LiteralPath $spec.FullName -Force
+        Write-Ok "specs/$($spec.Name) -> borrado"
     }
 }
 
@@ -283,11 +307,14 @@ if ($NoGit) {
 # Checklist final -----------------------------------------------------------
 Write-Host ""
 Write-Host "-- Siguiente paso (a mano) ----------------------------"
-Write-Host "  1. Rellena docs/architecture.md: capas, principios y flujo de datos."
-Write-Host "  2. Revisa docs/conventions.md y docs/verification.md."
-Write-Host "  3. Añade tus primeras features a feature_list.json (usa el bloque _example)."
+Write-Host "  1. Abre Claude Code en la raíz y pásale tus requisitos en lenguaje normal"
+Write-Host "     (o usa /requisitos). El analyst los deja en specs/ y redacta un"
+Write-Host "     borrador de docs/architecture.md."
+Write-Host "  2. Léelos y pídele los cambios que hagan falta: cada vuelta es una ronda."
+Write-Host "  3. Cuando estés conforme: /aprobar-requisitos. Ahí las features pasan a"
+Write-Host "     pending y se aprueba la arquitectura."
 Write-Host "  4. Ejecuta ./init.ps1 — debe quedar verde."
-Write-Host "  5. Pide a Claude Code: <<implementa la siguiente feature pendiente>>."
+Write-Host "  5. /next-feature para arrancar el desarrollo."
 if ($gitNote) {
     Write-Host "  6. $gitNote"
 }

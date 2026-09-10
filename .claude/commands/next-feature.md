@@ -2,8 +2,9 @@
 description: Ejecuta el ciclo completo del arnés sobre la siguiente feature pendiente.
 ---
 
-Coge la siguiente feature `pending` de `feature_list.json` (la de menor `id`) y
-ejecuta el ciclo completo del arnés como `leader`.
+Coge la siguiente feature `pending` de `feature_list.json` — la de **prioridad
+más alta** (`critica` > `alta` > `media` > `baja`) y, a igual prioridad, la de
+`id` menor — y ejecuta el ciclo completo del arnés como `leader`.
 
 **Qué dispara:**
 
@@ -25,3 +26,11 @@ ejecuta el ciclo completo del arnés como `leader`.
 tú directamente).
 
 **Si no hay features `pending`:** dilo y para. No inventes una.
+
+- Si además hay features en `draft`, el problema no es que falte trabajo: hay
+  requisitos esperando el OK del humano. Dile cuáles y sugiérele
+  `/aprobar-requisitos`.
+- Si tampoco hay `draft`, el proyecto todavía no tiene alcance: `/requisitos`.
+
+**`specs/` es de solo lectura en este ciclo.** Si un criterio de `acceptance`
+está mal, el que está mal es el requisito: paras y lo dices, no lo reescribes.

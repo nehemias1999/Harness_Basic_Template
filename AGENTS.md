@@ -15,13 +15,16 @@
    qué falta y para.
 2. Lee `progress/current.md` para entender en qué estado quedó la última sesión.
 3. Lee `feature_list.json` y elige **una** tarea con estado `pending`. No
-   trabajes en más de una a la vez.
+   trabajes en más de una a la vez. Las `draft` **no se trabajan**: son
+   requisitos que el humano todavía no aprobó. Si solo hay `draft`, no hay
+   nada que implementar — dilo y para.
 
 ## 2. Mapa del repositorio
 
 | Archivo / carpeta                  | Qué contiene                                              | Cuándo leerlo |
 |------------------------------------|-----------------------------------------------------------|---------------|
-| `feature_list.json`                | Lista de tareas con estado (pending / in_progress / done / blocked) | Siempre, al empezar |
+| `feature_list.json`                | Lista de tareas con estado (draft / pending / in_progress / done / blocked) y prioridad | Siempre, al empezar |
+| `specs/`                           | Los requisitos en formato SDD, uno por archivo. La fuente de la que salen las features | Antes de implementar, y siempre que dudes del alcance |
 | `progress/current.md`              | Estado de la sesión actual                                | Siempre, al empezar |
 | `progress/history.md`              | Bitácora append-only de sesiones anteriores               | Si necesitas contexto histórico |
 | `docs/architecture.md`             | Qué significa "hacer un buen trabajo" en este proyecto    | Antes de implementar |
@@ -32,15 +35,19 @@
 | `init.ps1` / `init.sh`             | El verificador (mismo comportamiento en ambas plataformas) | Al arrancar y antes de cerrar |
 | `bootstrap.ps1`                    | Instancia un proyecto nuevo desde la plantilla            | Solo la primera vez, y lo lanza un humano |
 | `scripts/validate_project_setup.py` | Comprueba que el proyecto está configurado (bloqueante)  | Lo llama el verificador; a mano si dudas de qué falta |
+| `scripts/validate_requirements.py` | Comprueba que nadie trabaja sobre un requisito sin aprobar (bloqueante) | Lo llama el verificador; a mano si dudas de la trazabilidad |
 | `schema/feature_list.schema.json`  | Formato exacto de una feature                             | Si dudas de la estructura del alcance |
-| `.claude/agents/`                  | Definiciones de subagentes (líder, implementador, revisor) | Si orquestas trabajo |
-| `.claude/commands/`                | Slash commands del ciclo (`/next-feature`, `/close-session`, `/harness-check`) | Para disparar el ciclo sin escribir el prompt |
+| `.claude/agents/`                  | Definiciones de subagentes (analista, líder, implementador, revisor) | Si orquestas trabajo |
+| `.claude/commands/`                | Slash commands del ciclo (`/requisitos`, `/aprobar-requisitos`, `/next-feature`, `/close-session`, `/harness-check`) | Para disparar el ciclo sin escribir el prompt |
 | `scripts/demo_orchestration.py`    | Demo del patrón Líder-Trabajador con escritura en disco   | Para entender la regla anti-teléfono-descompuesto |
 | `src/`                             | Código de la aplicación                                   | Para implementar |
 | `tests/`                           | Tests automáticos                                         | Para verificar |
 
 ## 3. Reglas duras (no negociables)
 
+- **No se trabaja lo que nadie aprobó.** Toda feature sale de un requisito de
+  `specs/` y no se toca hasta que ese requisito está `aprobado`. Un "dale" en
+  el chat no es una aprobación; lo es `/aprobar-requisitos`, que queda en git.
 - **Una sola feature a la vez.** No mezcles cambios de varias tareas en la misma sesión.
 - **No declares una tarea `done` sin pruebas verdes.** Ejecuta el verificador y
   asegúrate de que el bloque de tests pasa al 100%. Ojo: `[WARN] 0 tests`
@@ -55,11 +62,17 @@
 
 ```
 1. Abre feature_list.json
-2. Filtra por status == "pending"
-3. Coge la de menor "id"
-4. Cambia su status a "in_progress" y guarda
-5. Anota en progress/current.md: feature, hora de inicio, plan breve
+2. Filtra por status == "pending"     (draft = requisito sin aprobar: se ignora)
+3. Si no queda ninguna, para: no hay trabajo aprobado
+4. Ordena por prioridad: critica > alta > media > baja
+5. A igual prioridad, coge la de menor "id"
+6. Cambia su status a "in_progress" y guarda
+7. Anota en progress/current.md: feature, hora de inicio, plan breve
 ```
+
+El orden lo fija `rules.orden_de_trabajo` en `feature_list.json`. La prioridad
+la hereda cada feature de su requisito, así que si te parece mal ordenada, lo
+que hay que discutir es el requisito — no la feature.
 
 ## 5. Cierre de sesión (lifecycle)
 

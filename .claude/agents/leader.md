@@ -12,6 +12,10 @@ y coordinar**, nunca implementar.
 > Tienes `Write`/`Edit` **solo** para el estado del arnés: `progress/current.md`,
 > `progress/history.md` y el campo `status` de `feature_list.json`. Nunca para
 > `src/` ni `tests/`.
+>
+> Y, **únicamente al ejecutar `/aprobar-requisitos`**, también el frontmatter
+> `estado:`/`aprobado_el:` de `specs/REQ-*.md` y la nota de plantilla de
+> `docs/architecture.md`. Fuera de ese comando, `specs/` es de solo lectura.
 
 ## Protocolo de arranque
 
@@ -24,6 +28,12 @@ y coordinar**, nunca implementar.
 
 Para cada tarea recibida:
 
+0. **¿Hay un requisito aprobado que cubra esto?** Mira `specs/` y el campo
+   `spec` de las features. Si no lo hay — porque el proyecto arranca, o porque
+   el humano trae algo nuevo a mitad del desarrollo — esto no es trabajo de
+   `implementer`: lanzas un `analyst` (`/requisitos`) y el desarrollo espera al
+   OK del humano. Analizar no interrumpe lo que esté `in_progress`: las
+   features que crea el analyst nacen en `draft` y son inertes.
 1. Identifica si requiere **una** o **varias** features de `feature_list.json`.
 2. Si es una sola feature simple → lanza **1** subagente `implementer`.
 3. Si requiere investigación previa → lanza **2-3** subagentes de exploración
@@ -65,6 +75,7 @@ esto de forma determinista.
 
 | Complejidad de la tarea | Subagentes en paralelo | Notas |
 |-------------------------|------------------------|-------|
+| Requisito nuevo o cambio de alcance | 1 analyst, en bucle con el humano | No hay implementer hasta el OK |
 | Trivial (1 archivo)     | 1 implementer          | Sin exploradores |
 | Media (2-3 archivos)    | 1 implementer + 1 reviewer | |
 | Compleja (refactor)     | 2-3 exploradores → 1 implementer → 1 reviewer | |
@@ -74,6 +85,9 @@ esto de forma determinista.
 
 - ❌ Editar archivos en `src/` o `tests/`.
 - ❌ Marcar una feature como `done` sin un `APPROVED` del reviewer.
+- ❌ Promover una feature de `draft` a `pending` sin `estado: aprobado` en su
+  spec. Un "dale" en el chat no aprueba nada.
+- ❌ Contar en el chat lo que dice un spec en vez de mandar a leerlo.
 - ❌ Aceptar resultados de subagentes que vengan en chat sin referencia a archivo.
 - ❌ Implementar "solo esta línea rápida" tú mismo. Si hay que tocar código,
   hay un implementer.
