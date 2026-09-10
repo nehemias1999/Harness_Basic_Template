@@ -8,11 +8,13 @@
 | Script | Quién lo ejecuta | Cuándo |
 |--------|------------------|--------|
 | `init.ps1` / `init.sh` | agente, hook `Stop`, reviewer | al arrancar la sesión y antes de todo `done` |
-| `bootstrap.ps1` | humano | una vez, al instanciar un proyecto nuevo desde la plantilla |
+| `bootstrap.ps1` / `bootstrap.sh` | humano | una vez, al instanciar un proyecto nuevo desde la plantilla |
 | `scripts/validate_project_setup.py` | `init.*` (y a mano) | bloquea el arranque si el proyecto no está configurado |
 | `scripts/validate_feature_list.py` | `init.*` (y a mano) | siempre que haya que comprobar el alcance |
 | `scripts/validate_requirements.py` | `init.*` (y a mano) | bloquea si se está trabajando sobre un requisito sin aprobar |
 | `scripts/harness_hook.py` | hooks `PostToolUse` y `Stop` | automático; bloquean con exit 2 |
+| `scripts/validate_referencias.py` | `/harness-check` y el CI | para que la documentación no mande a archivos que no existen |
+| `scripts/instanciar.py` | `bootstrap.ps1` y `bootstrap.sh` | la lógica de instanciación, compartida por las dos plataformas |
 | `scripts/demo_orchestration.py` | humano o agente | para entender o demostrar el patrón anti-teléfono-descompuesto |
 | `.github/workflows/harness.yml` | GitHub Actions | en cada push y cada PR |
 
@@ -83,7 +85,7 @@ Los `[WARN]` **no** bloquean; los `[FAIL]` sí.
 
 ---
 
-## `bootstrap.ps1` — instanciar un proyecto
+## `bootstrap.ps1` / `bootstrap.sh` — instanciar un proyecto
 
 Convierte la plantilla en tu proyecto. Se ejecuta **una vez**, a mano, justo
 después de copiar el repo.
@@ -91,17 +93,29 @@ después de copiar el repo.
 ```powershell
 ./bootstrap.ps1 -Name "mi-proyecto" -WhatIf                       # ensayo en seco
 ./bootstrap.ps1 -Name "mi-proyecto" -Description "Qué hace."      # de verdad
-./bootstrap.ps1 -Name "otro" -Force                               # reinicia también el historial
+./bootstrap.ps1 -Name "otro" -Force                               # insiste sobre un proyecto vivo
 ```
 
-| Parámetro | Efecto |
-|-----------|--------|
-| `-Name` | obligatorio; nombre del proyecto |
-| `-Description` | una línea; si se omite, deja el placeholder |
-| `-Force` | reinicia `progress/history.md` aunque tenga entradas |
-| `-ResetGit` | borra el `.git` heredado y empieza un historial nuevo |
-| `-NoGit` | no toca git en absoluto |
-| `-WhatIf` | lista los cambios sin aplicarlos |
+```bash
+./bootstrap.sh --name "mi-proyecto" --dry-run                     # ensayo en seco
+./bootstrap.sh --name "mi-proyecto" --description "Qué hace."     # de verdad
+```
+
+| Windows | POSIX | Efecto |
+|---------|-------|--------|
+| `-Name` | `--name` | obligatorio; nombre del proyecto |
+| `-Description` | `--description` | una línea; si se omite, deja el placeholder |
+| `-Force` | `--force` | instancia aunque ya sea un proyecto, y reinicia `history.md` |
+| `-ResetGit` | `--reset-git` | borra el `.git` heredado y empieza un historial nuevo |
+| `-NoGit` | `--no-git` | no toca git en absoluto |
+| `-WhatIf` | `--dry-run` | lista los cambios sin aplicarlos |
+
+**Los dos son wrappers de `scripts/instanciar.py`**, que es donde vive la
+lógica. Son ~200 líneas de decisiones sobre qué borrar y qué conservar:
+mantenerlas duplicadas en PowerShell y en bash garantizaba que un día dijeran
+cosas distintas, que es el mismo motivo por el que los validadores son módulos
+Python compartidos. Los wrappers solo traducen argumentos y buscan el
+intérprete.
 
 Qué toca: `feature_list.json` (nombre, descripción, **`features: []`**), los
 placeholders de `README.md` y de `docs/architecture.md`, `conventions.md` y

@@ -222,6 +222,49 @@ class TestCierreDeUnaFeature(FeatureListCase):
         self.assertEqual(self.errores([feature(status="pending")]), [])
 
 
+class TestElSchemaNoSeDesincroniza(unittest.TestCase):
+    """El schema es documentación y nadie lo carga: sin esto, deriva.
+
+    `schema/feature_list.schema.json` describe el formato y
+    `validate_feature_list.py` lo hace cumplir. Son dos fuentes de verdad, y la
+    única forma de que no digan cosas distintas dentro de seis meses es
+    compararlas acá.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        with open(os.path.join(raiz, "schema", "feature_list.schema.json"), encoding="utf-8") as h:
+            cls.schema = json.load(h)
+        cls.feature = cls.schema["definitions"]["feature"]
+
+    def test_los_estados_coinciden(self) -> None:
+        self.assertEqual(
+            self.feature["properties"]["status"]["enum"], list(vfl.VALID_STATUS)
+        )
+
+    def test_las_prioridades_coinciden(self) -> None:
+        self.assertEqual(
+            self.feature["properties"]["prioridad"]["enum"], list(vfl.PRIORIDADES)
+        )
+
+    def test_los_campos_obligatorios_coinciden(self) -> None:
+        self.assertEqual(
+            sorted(self.feature["required"]), sorted(vfl.REQUIRED_FEATURE_KEYS)
+        )
+
+    def test_los_patrones_coinciden(self) -> None:
+        self.assertEqual(self.feature["properties"]["name"]["pattern"], vfl.NAME_RE.pattern)
+        self.assertEqual(self.feature["properties"]["spec"]["pattern"], vfl.SPEC_RE.pattern)
+
+    def test_las_reglas_declaradas_estan_en_el_schema(self) -> None:
+        declaradas = set(self.schema["properties"]["rules"]["properties"])
+        self.assertTrue(
+            set(vfl.REGLAS_FIJAS).issubset(declaradas),
+            f"el schema no declara {set(vfl.REGLAS_FIJAS) - declaradas}",
+        )
+
+
 class TestArchivo(FeatureListCase):
     def test_archivo_inexistente(self) -> None:
         errs = vfl.validate(os.path.join(self.root, "no_existe.json"))

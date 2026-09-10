@@ -33,7 +33,7 @@
 | `docs/scripts.md`                  | Qué hace cada script, sus parámetros y qué hacer si falla | Si un script falla o no sabes cuál usar |
 | `CHECKPOINTS.md`                   | Criterios objetivos de "estado final correcto"            | Para auto-evaluarte |
 | `init.ps1` / `init.sh`             | El verificador (mismo comportamiento en ambas plataformas) | Al arrancar y antes de cerrar |
-| `bootstrap.ps1`                    | Instancia un proyecto nuevo desde la plantilla            | Solo la primera vez, y lo lanza un humano |
+| `bootstrap.ps1` / `bootstrap.sh`   | Instancia un proyecto nuevo desde la plantilla            | Solo la primera vez, y **lo lanza un humano**: está en la lista `deny` |
 | `scripts/validate_project_setup.py` | Comprueba que el proyecto está configurado (bloqueante)  | Lo llama el verificador; a mano si dudas de qué falta |
 | `scripts/validate_requirements.py` | Comprueba que nadie trabaja sobre un requisito sin aprobar (bloqueante) | Lo llama el verificador; a mano si dudas de la trazabilidad |
 | `schema/feature_list.schema.json`  | Formato exacto de una feature                             | Si dudas de la estructura del alcance |

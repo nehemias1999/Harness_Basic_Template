@@ -75,7 +75,8 @@ ok "Versión de Python compatible"
 echo ""
 echo "── 2. Verificando archivos base del arnés ──────────────"
 
-for f in AGENTS.md CHECKPOINTS.md feature_list.json progress/current.md \
+for f in AGENTS.md CLAUDE.md CHECKPOINTS.md README.md feature_list.json \
+         progress/current.md progress/history.md specs/_plantilla_req.md \
          docs/architecture.md docs/conventions.md docs/verification.md docs/scripts.md; do
   if [ ! -f "$f" ]; then
     fail "Falta archivo base: $f"
