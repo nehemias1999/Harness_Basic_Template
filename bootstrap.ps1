@@ -94,6 +94,43 @@ if ($missing) {
     exit 1
 }
 
+# 0. ¿Esto ya es un proyecto? -----------------------------------------------
+# Este script vacía `features`, borra los requisitos de `specs/` y reinicia
+# `progress/`. Sobre la plantilla recién copiada eso es exactamente lo que hay
+# que hacer; sobre un proyecto vivo es una pérdida de trabajo irreversible, y
+# el `ShouldProcess` de más abajo no pregunta nada con la configuración por
+# defecto de PowerShell. Así que aquí se planta.
+$instanciado = @()
+$projectName = ""
+try {
+    $projectName = (Get-Content -LiteralPath "feature_list.json" -Raw -Encoding UTF8 |
+        ConvertFrom-Json).project
+} catch { $projectName = "" }
+
+if ($projectName -and $projectName -ne "<TU_PROYECTO>") {
+    $instanciado += "feature_list.json ya es del proyecto '$projectName'"
+}
+$specsExistentes = Get-ChildItem -Path "specs" -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match "^REQ-\d{3}_.*\.md$" }
+if ($specsExistentes) {
+    $instanciado += "hay $($specsExistentes.Count) requisito(s) en specs/"
+}
+
+if ($instanciado -and -not $Force) {
+    Write-Fail "Este repositorio ya es un proyecto instanciado:"
+    foreach ($razon in $instanciado) { Write-Host "          - $razon" }
+    Write-Host ""
+    Write-Host "        bootstrap.ps1 vacía las features, borra los requisitos de specs/"
+    Write-Host "        y reinicia progress/. Sobre un proyecto vivo eso no se recupera."
+    Write-Host ""
+    Write-Host "        Si de verdad quieres volver a instanciarlo, dilo explícitamente:"
+    Write-Host ""
+    Write-Host "          ./bootstrap.ps1 -Name `"$Name`" -Force"
+    Write-Host ""
+    Write-Host "        Y si solo querías ver qué haría: añade -WhatIf."
+    exit 1
+}
+
 Write-Host "-- Instanciando proyecto '$Name' ----------------------"
 
 # 1. feature_list.json -------------------------------------------------------

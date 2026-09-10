@@ -58,3 +58,12 @@ contenido. Ver `scripts/demo_orchestration.py` para el patrón, y
   `bootstrap.ps1`, los hooks, las plantillas de `docs/`) → es infraestructura,
   no una feature del proyecto: puedes trabajarlo directamente sin pasar por el
   ciclo implementer/reviewer. Anótalo en `progress/current.md` igualmente.
+
+  Pero **no a mitad de una sesión de desarrollo**. Esos archivos son los que
+  deciden si tu trabajo está bien hecho, y un agente que ve el verificador en
+  rojo tiene a mano una forma trivial de ponerlo en verde. Por eso un hook los
+  protege: para tocarlos hay que declarar el mantenimiento creando
+  `.harness-mantenimiento` en la raíz, y borrarlo al terminar. Si te topas con
+  ese bloqueo mientras implementabas una feature, la respuesta correcta casi
+  nunca es abrir la puerta: es que el arnés está diciendo algo que no querías
+  oír.
