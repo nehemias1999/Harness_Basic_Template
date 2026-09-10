@@ -20,7 +20,8 @@ más alta** (`critica` > `alta` > `media` > `baja`) y, a igual prioridad, la de
    Si `CHANGES_REQUESTED` → relanzas al implementer pasándole la **ruta** del
    review, no su contenido.
 
-**Archivos que toca:** `feature_list.json` (campo `status`),
+**Archivos que toca:** `feature_list.json` (el campo `status`, y solo para
+cerrar: el paso a `in_progress` lo hace el implementer al tomar la feature),
 `progress/current.md`, `progress/history.md`, `progress/impl_<feature>.md`,
 `progress/review_<feature>.md`, y `src/` + `tests/` (vía el implementer, nunca
 tú directamente).

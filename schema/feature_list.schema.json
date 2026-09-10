@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "$id": "https://example.invalid/harness/feature_list.schema.json",
   "title": "feature_list",
-  "description": "Alcance del proyecto: la lista de features y su estado. init.ps1 / init.sh valida este archivo contra el schema en cada arranque. Las features se derivan de los requisitos aprobados en specs/ (ver scripts/validate_requirements.py).",
+  "description": "Alcance del proyecto: la lista de features y su estado. Este archivo es DOCUMENTACIÓN: ningún script lo carga (el arnés no tiene dependencias externas, así que no hay jsonschema). Quien hace cumplir estas mismas reglas es scripts/validate_feature_list.py, a mano y con los mismos tipos y patrones; si tocas uno, toca el otro. Las features se derivan de los requisitos aprobados en specs/ (ver scripts/validate_requirements.py).",
   "type": "object",
   "required": ["project", "rules", "features"],
   "properties": {

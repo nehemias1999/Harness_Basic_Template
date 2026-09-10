@@ -103,18 +103,28 @@ después de copiar el repo.
 | `-NoGit` | no toca git en absoluto |
 | `-WhatIf` | lista los cambios sin aplicarlos |
 
-Qué toca: `feature_list.json` (nombre, descripción, `features: []`), los
+Qué toca: `feature_list.json` (nombre, descripción, **`features: []`**), los
 placeholders de `README.md` y de `docs/architecture.md`, `conventions.md` y
-`verification.md`, `progress/current.md`, `progress/history.md`, y borra informes
-residuales (`progress/explore_*.md`, `impl_*.md`, `review_*.md`).
+`verification.md`, `progress/current.md`, `progress/history.md`, borra los
+informes residuales (`progress/explore_*.md`, `impl_*.md`, `review_*.md`,
+`intake_*.md`) y **borra todos los requisitos de `specs/REQ-*.md`**, aprobados
+incluidos.
 
 La lista de archivos con placeholders es explícita a propósito: este archivo y
 `CHECKPOINTS.md` *hablan* de los placeholders, así que sustituirlos aquí
 destrozaría su propia documentación.
 
-Es idempotente: reejecutarlo con otro nombre solo reescribe el nombre. Protege el
-historial: si `progress/history.md` tiene entradas reales, avisa y no lo borra
-salvo `-Force`.
+**No es idempotente y no es inofensivo**: vacía el alcance y borra los
+requisitos. Por eso se planta si el repositorio ya es un proyecto instanciado
+—tiene nombre propio o requisitos en `specs/`— y hay que pasarle `-Force` para
+insistir. Ese es el guardarraíl que importa; el `ShouldProcess` del script no
+pregunta nada con la configuración por defecto de PowerShell.
+
+`progress/history.md` tiene además su propia protección: si tiene entradas
+reales, avisa y no lo borra salvo `-Force`.
+
+Y no está en la lista de permisos del agente, está en `deny`: instanciar un
+proyecto es un acto humano.
 
 ### Lo que hace con git
 
@@ -300,6 +310,30 @@ trazabilidad está rota.
 instanciado saldría verde con tests que no son suyos y el arnés dejaría de
 distinguir "sin verificar" de "verificado". Los corre `/harness-check`, o tú:
 `python -m unittest discover -s scripts/tests -v`.
+
+---
+
+## Actualizar un proyecto hecho con una plantilla vieja
+
+Un proyecto instanciado antes de la capa de requisitos sale en rojo apenas
+actualiza el arnés, y con razón: le falta la mitad del contrato. Qué hay que
+hacer, una vez:
+
+1. En `feature_list.json`, `rules` pasa a:
+   ```json
+   "one_feature_at_a_time": true,
+   "require_tests_to_close": true,
+   "orden_de_trabajo": "prioridad_luego_id",
+   "valid_status": ["draft", "pending", "in_progress", "done", "blocked"]
+   ```
+2. Cada feature necesita `spec` y `prioridad`. Si el trabajo ya está hecho y no
+   hay requisito escrito, escribí uno retroactivo con `/requisitos` que cubra
+   lo que existe: es más honesto que inventar un puntero, y deja el "por qué"
+   documentado antes de que se pierda.
+3. Las features `done` necesitan sus informes en `progress/`. Si son de antes y
+   no existen, la salida menos mala es dejar constancia de eso mismo en el
+   informe: "cerrada antes de que el arnés exigiera review".
+4. `./init.ps1` o `./init.sh` te va diciendo qué falta, de a un error por causa.
 
 ---
 
