@@ -1,5 +1,5 @@
 {
-  "$schema_comment": "Hooks que automatizan la verificación del arnés. Los ejecuta Claude Code, no el agente, así que no se pueden saltar. Los comandos están en PowerShell porque este template es canónico en Windows; en WSL/Linux cambia 'powershell -File ./init.ps1' por './init.sh' y 'python' por 'python3'. Ver docs/scripts.md.",
+  "$schema_comment": "Hooks que automatizan la verificación del arnés. Los ejecuta Claude Code, no el agente. Para que un hook BLOQUEE hay que salir con exit 2 y escribir el motivo por stderr: con exit 1 la salida se muestra y la sesión sigue igual. De eso se ocupa scripts/harness_hook.py, que además funciona en Windows y en POSIX (antes eran comandos PowerShell y en Linux no corría nada). Ojo con el alcance: el matcher Edit|Write no cubre las escrituras hechas con Bash. Ver docs/scripts.md.",
   "hooks": {
     "PostToolUse": [
       {
@@ -7,8 +7,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/harness_test_hook.ps1",
-            "description": "Tras editar o escribir archivos, corre los tests y muestra el resumen."
+            "command": "python scripts/harness_hook.py post-edit",
+            "description": "Tras editar o escribir archivos, corre los tests y bloquea si están rotos."
           }
         ]
       }
@@ -18,8 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./init.ps1 -Quiet",
-            "description": "Antes de cerrar la sesión, fuerza la verificación completa del arnés."
+            "command": "python scripts/harness_hook.py stop",
+            "description": "Antes de cerrar la sesión, corre el verificador y bloquea el cierre si está en rojo."
           }
         ]
       }
@@ -29,7 +29,6 @@
     "allow": [
       "PowerShell(./init.ps1*)",
       "PowerShell(./bootstrap.ps1*)",
-      "PowerShell(./scripts/harness_test_hook.ps1*)",
       "Bash(./init.sh)",
       "Bash(python -m unittest*)",
       "Bash(python3 -m unittest*)",
