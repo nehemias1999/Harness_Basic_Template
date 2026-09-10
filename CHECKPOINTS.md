@@ -6,8 +6,10 @@
 
 ## C1 — El arnés está completo
 
-- [ ] Existen los 4 archivos base: `AGENTS.md`, el verificador (`init.ps1` y/o
-      `init.sh`), `feature_list.json`, `progress/current.md`.
+- [ ] Existen los archivos base del arnés. Los comprueba la sección 2 del
+      verificador: `AGENTS.md`, `CLAUDE.md`, `CHECKPOINTS.md`, `README.md`,
+      `feature_list.json`, `progress/current.md`, `progress/history.md`,
+      `specs/_plantilla_req.md` y los cuatro `docs/`.
 - [ ] Existen los 4 docs: `docs/architecture.md`, `docs/conventions.md`,
       `docs/verification.md`, `docs/scripts.md`.
 - [ ] El verificador termina con exit code 0. (En la plantilla sin instanciar

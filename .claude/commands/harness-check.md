@@ -13,9 +13,10 @@ Es una revisión **de solo lectura**: no arregles nada, solo informa.
    - `[x]` se cumple
    - `[ ]` no se cumple → cita archivo y línea concretos
    - `[-]` no aplica todavía → di por qué (p. ej. proyecto sin código aún)
-3. Comprueba además que no hay **referencias colgantes**: toda ruta mencionada
-   en `CLAUDE.md`, `AGENTS.md`, `README.md` y `docs/scripts.md` existe de verdad,
-   y todo campo `spec` de `feature_list.json` apunta a un archivo que existe.
+3. Comprueba que no hay **referencias colgantes**, con el script que lo hace
+   por vos: `python scripts/validate_referencias.py .`. Recorre las rutas
+   mencionadas en la documentación de referencia y los punteros `spec` de
+   `feature_list.json`.
 4. Ejecuta los tests del propio arnés y reporta el resultado:
    `python -m unittest discover -s scripts/tests -v`. No los corre el
    verificador a propósito (ver `docs/scripts.md`), así que si nadie los mira

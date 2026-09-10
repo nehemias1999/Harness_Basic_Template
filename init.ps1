@@ -80,9 +80,13 @@ Write-Host "-- 2. Verificando archivos base del arnés -------------"
 
 $BaseFiles = @(
     "AGENTS.md",
+    "CLAUDE.md",
     "CHECKPOINTS.md",
+    "README.md",
     "feature_list.json",
     "progress/current.md",
+    "progress/history.md",
+    "specs/_plantilla_req.md",
     "docs/architecture.md",
     "docs/conventions.md",
     "docs/verification.md",

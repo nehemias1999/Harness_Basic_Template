@@ -64,6 +64,13 @@ jobs:
           python scripts/validate_feature_list.py feature_list.json
           python scripts/validate_requirements.py .
 
+      - name: Sin referencias colgantes
+        # CHECKPOINTS.md C1 lo pide desde siempre; hasta ahora no lo
+        # comprobaba nadie. No lo corre el verificador a propósito: una
+        # referencia rota es deuda de documentación, no motivo para frenar
+        # una sesión de trabajo.
+        run: python scripts/validate_referencias.py .
+
       - name: Los hooks bloquean
         # Si esto deja de salir 2, los hooks vuelven a ser decorativos y nadie
         # se entera hasta que una sesión cierre con el verificador en rojo.

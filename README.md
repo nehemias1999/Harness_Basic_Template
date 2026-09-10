@@ -25,6 +25,14 @@ Si acabas de copiar esta plantilla, ve a [Arranque rápido](#arranque-rápido).
 ./bootstrap.ps1 -Name "mi-proyecto" -Description "Qué hace."           # de verdad
 ```
 
+```bash
+./bootstrap.sh --name "mi-proyecto" --description "Qué hace." --dry-run  # ensayo
+./bootstrap.sh --name "mi-proyecto" --description "Qué hace."            # de verdad
+```
+
+Los dos hacen exactamente lo mismo: son wrappers de `scripts/instanciar.py`,
+que es donde vive la lógica.
+
 Si **clonaste** esta plantilla en vez de copiarla, añade `-ResetGit` para no
 arrastrar su historial. En cualquiera de los dos casos el script deja el
 repositorio git del proyecto listo y, si hacía falta, desconecta el `origin`
@@ -70,7 +78,7 @@ a `feature_list.json` tú mismo. El arnés valida lo mismo en los dos casos.
 | Script | Quién lo ejecuta | Cuándo |
 |--------|------------------|--------|
 | `init.ps1` / `init.sh` | agente, hook `Stop`, reviewer | al arrancar la sesión y antes de todo `done` |
-| `bootstrap.ps1` | humano | una vez, al instanciar el proyecto |
+| `bootstrap.ps1` / `bootstrap.sh` | humano | una vez, al instanciar el proyecto |
 | `scripts/validate_project_setup.py` | `init.*` (y a mano) | bloquea el arranque si el proyecto no está configurado |
 | `scripts/validate_requirements.py` | `init.*` (y a mano) | bloquea si se trabaja sobre un requisito sin aprobar |
 | `scripts/validate_feature_list.py` | `init.*` (y a mano) | para comprobar el alcance |
@@ -83,7 +91,12 @@ Parámetros, exit codes y qué hacer cuando cada uno falla: **`docs/scripts.md`*
 
 `init.ps1` e `init.sh` son **el mismo verificador**: misma estructura de siete
 secciones, misma salida `[OK]/[WARN]/[FAIL]`, mismo exit code. Usa el `.ps1` en
-Windows y el `.sh` en WSL, macOS, Linux o CI. Si tocas uno, toca el otro.
+Windows y el `.sh` en WSL, macOS, Linux o CI. Si tocas uno, toca el otro — y el
+CI comprueba que declaren las mismas secciones, para que "si tocas uno" no
+dependa de que alguien se acuerde.
+
+Lo mismo con `bootstrap.ps1` y `bootstrap.sh`, salvo que ahí no hay dos
+implementaciones: los dos llaman a `scripts/instanciar.py`.
 
 Los hooks de `.claude/settings.json` ya no dependen de la plataforma: son
 `python scripts/harness_hook.py`, y el script elige `init.ps1` o `init.sh`
@@ -171,7 +184,8 @@ cuanto el subagente termina. Así auditas paso a paso quién decidió qué.
 ├── feature_list.json                # Backlog ejecutable, derivado de specs/
 ├── init.ps1                         # Verificador (Windows)
 ├── init.sh                          # Verificador (POSIX)
-├── bootstrap.ps1                    # Instancia un proyecto nuevo
+├── bootstrap.ps1                    # Instancia un proyecto nuevo (Windows)
+├── bootstrap.sh                     # Instancia un proyecto nuevo (POSIX)
 ├── docs/
 │   ├── architecture.md              # Qué significa "buen trabajo" (lo redacta el analyst, lo apruebas tú)
 │   ├── conventions.md               # Estilo, nombres, errores
@@ -190,6 +204,8 @@ cuanto el subagente termina. Así auditas paso a paso quién decidió qué.
 ├── scripts/
 │   ├── validate_feature_list.py     # Valida el alcance (lo usan init.ps1 e init.sh)
 │   ├── validate_requirements.py     # Valida requisito -> feature (íd.)
+│   ├── validate_referencias.py      # Que la documentación no mande a archivos que no existen
+│   ├── instanciar.py                # La lógica de bootstrap, compartida por las dos plataformas
 │   ├── tests/                       # Tests del propio arnés (no los corre init.*)
 │   ├── harness_hook.py              # Los hooks: tests tras cada edición y verificador al cerrar
 │   └── demo_orchestration.py        # Demo del patrón Líder-Trabajador
