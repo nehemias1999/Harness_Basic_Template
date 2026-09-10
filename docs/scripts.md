@@ -14,6 +14,7 @@
 | `scripts/validate_requirements.py` | `init.*` (y a mano) | bloquea si se está trabajando sobre un requisito sin aprobar |
 | `scripts/harness_hook.py` | hooks `PostToolUse` y `Stop` | automático; bloquean con exit 2 |
 | `scripts/demo_orchestration.py` | humano o agente | para entender o demostrar el patrón anti-teléfono-descompuesto |
+| `.github/workflows/harness.yml` | GitHub Actions | en cada push y cada PR |
 
 ---
 
@@ -358,6 +359,27 @@ silenciosa y pasa a ser una decisión visible.
 Es Python y no PowerShell para que funcione igual en Windows y en POSIX: la
 versión anterior era PowerShell puro y en WSL o Linux no corría en absoluto.
 Internamente elige `init.ps1` o `init.sh` según el sistema.
+
+---
+
+## `.github/workflows/harness.yml` — el arnés verificándose
+
+Tres jobs en cada push y cada PR:
+
+- **POSIX**: los tests del arnés, `init.sh`, los validadores por separado, y
+  una comprobación de que los hooks **siguen saliendo con 2**. Si eso se
+  rompiera, los hooks volverían a ser decorativos y nadie se enteraría hasta
+  que una sesión cerrara con el verificador en rojo.
+- **Windows**: los tests e `init.ps1`, porque el `.ps1` es el canónico de la
+  plantilla y hasta ahora nadie lo corría más que a mano.
+- **Paridad**: comprueba que `init.ps1` e `init.sh` declaran exactamente las
+  mismas secciones. `docs/scripts.md` dice "si cambias uno, cambia el otro";
+  esto lo convierte en algo comprobable en vez de una buena intención.
+
+El verificador **tiene que salir con 1** en este repositorio: es la plantilla
+sin instanciar y su sección 3 lo bloquea a propósito. El CI comprueba que falle
+por esa razón y no por otra, y que las secciones que no dependen de la
+instanciación estén en verde.
 
 ---
 
