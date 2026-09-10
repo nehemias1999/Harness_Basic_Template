@@ -13,6 +13,7 @@
 | `scripts/validate_feature_list.py` | `init.*` (y a mano) | siempre que haya que comprobar el alcance |
 | `scripts/validate_requirements.py` | `init.*` (y a mano) | bloquea si se está trabajando sobre un requisito sin aprobar |
 | `scripts/harness_hook.py` | hooks `PostToolUse` y `Stop` | automático; bloquean con exit 2 |
+| `scripts/aprobar.py` | `/aprobar` y `/aprobar-todos` | cuando el humano firma requisitos |
 | `scripts/validate_referencias.py` | `/harness-check` y el CI | para que la documentación no mande a archivos que no existen |
 | `scripts/instanciar.py` | `bootstrap.ps1` y `bootstrap.sh` | la lógica de instanciación, compartida por las dos plataformas |
 | `scripts/demo_orchestration.py` | humano o agente | para entender o demostrar el patrón anti-teléfono-descompuesto |
@@ -71,7 +72,7 @@ Los `[WARN]` **no** bloquean; los `[FAIL]` sí.
 | `Falta archivo base: X` | el arnés está incompleto: recupera `X` (ver `CHECKPOINTS.md` C1) |
 | `Este repositorio es la plantilla del arnés SIN INSTANCIAR` | ejecuta `./bootstrap.ps1 -Name "..."` |
 | `docs/architecture.md tiene placeholders sin rellenar` | pídeselo al `analyst` (`/requisitos`); es el criterio del reviewer, sin él no hay revisión posible |
-| `sigue en estado "draft" (nadie aprobó ese requisito)` | ejecuta `/aprobar-requisitos`, o devuelve la feature a `draft` |
+| `sigue en estado "draft" (nadie aprobó ese requisito)` | el humano lo aprueba con `/aprobar <id>`, o se devuelve la feature a `draft` |
 | `"rules.…" vale … y el arnés trabaja con …` | alguien aflojó una regla del arnés editando `feature_list.json`: devuélvela a su valor |
 | `ni un solo test en tests/` | una feature `done` sin pruebas: escribe los tests o reabre la feature |
 | `aprobado_el … tiene que ser una fecha` | pon la fecha real de aprobación en formato `AAAA-MM-DD` |
@@ -279,7 +280,7 @@ python scripts/validate_requirements.py           # el repo actual
 python scripts/validate_requirements.py ../otro
 ```
 
-**La huella de lo aprobado.** Al firmar un requisito, `/aprobar-requisitos`
+**La huella de lo aprobado.** Al firmar un requisito, `/aprobar`
 guarda en `aprobado_hash` una huella de su contenido, y el validador la
 recalcula en cada corrida. Sin eso, "aprobado" solo significaba que alguien
 escribió la palabra: editarle los criterios después no dejaba ni rastro, y el
@@ -324,6 +325,47 @@ trazabilidad está rota.
 instanciado saldría verde con tests que no son suyos y el arnés dejaría de
 distinguir "sin verificar" de "verificado". Los corre `/harness-check`, o tú:
 `python -m unittest discover -s scripts/tests -v`.
+
+---
+
+## `scripts/aprobar.py` — firmar requisitos
+
+El paso mecánico de la aprobación. El humano dice **qué** aprobar; el script se
+ocupa de las cuatro cosas que hay que tocar a la vez.
+
+```bash
+python scripts/aprobar.py 1 2             # REQ-001 y REQ-002
+python scripts/aprobar.py REQ-003         # da igual cómo escribas el id
+python scripts/aprobar.py todos           # todos los que estén en draft
+python scripts/aprobar.py 1 arquitectura  # y además firma docs/architecture.md
+python scripts/aprobar.py todos --dry-run
+```
+
+Por cada requisito nombrado: `estado: draft` → `aprobado`, la fecha de hoy en
+`aprobado_el` y `actualizado`, la huella del contenido en `aprobado_hash`, la
+fila de la bitácora (§8), y sus features de `draft` a `pending`.
+
+**Por qué es un script y no la prosa de un `.md`.** Son cuatro archivos que hay
+que dejar coherentes entre sí, y a medio camino el repositorio queda en un
+estado que el verificador marca en rojo. Ese es exactamente el tipo de trabajo
+en el que un agente se saltea un paso, y el que más fácil se saltea es justo el
+que hace verificable la aprobación: la huella.
+
+**Es todo o nada.** Si algo de lo que nombraste no se puede firmar —tiene
+preguntas sin responder, ya estaba aprobado, o `docs/architecture.md` conserva
+huecos— no se escribe nada. Firmar la mitad deja un estado que nadie pidió.
+
+**`arquitectura` se nombra aparte** a propósito: es el criterio contra el que el
+reviewer juzga *todo* el código, y aprobarlo de rebote junto a un requisito
+sería el descuido que el arnés intenta evitar.
+
+**No está en la lista de permisos, y es a propósito.** Cuando el agente lo
+ejecuta, Claude Code te muestra el comando exacto —`python scripts/aprobar.py
+1 2`— y espera tu confirmación. Ese aviso es la última oportunidad de ver *qué*
+se está firmando antes de que se firme, y sale gratis.
+
+Exit codes: `0` firmado (o simulado) · `1` no se firmó nada, y el motivo está
+impreso.
 
 ---
 
