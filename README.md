@@ -20,22 +20,25 @@ If you have just copied this template, go to [Quick start](#quick-start).
 ## Quick start
 
 ```powershell
-./bootstrap.ps1 -Name "my-project" -Description "What it does." -WhatIf   # dry run
-./bootstrap.ps1 -Name "my-project" -Description "What it does."           # for real
+./bootstrap.ps1 -Name "my-project" -Description "What it does." -Repo "https://github.com/me/my-project.git" -WhatIf   # dry run
+./bootstrap.ps1 -Name "my-project" -Description "What it does." -Repo "https://github.com/me/my-project.git"           # for real
 ```
 
 ```bash
-./bootstrap.sh --name "my-project" --description "What it does." --dry-run  # dry run
-./bootstrap.sh --name "my-project" --description "What it does."            # for real
+./bootstrap.sh --name "my-project" --description "What it does." --repo "https://github.com/me/my-project.git" --dry-run  # dry run
+./bootstrap.sh --name "my-project" --description "What it does." --repo "https://github.com/me/my-project.git"            # for real
 ```
 
 Both do exactly the same thing: they are wrappers around
 `scripts/instantiate.py`, which is where the logic lives.
 
-If you **cloned** this template instead of copying it, add `-ResetGit` so you
-do not drag its history along. Either way the script leaves the project's git
-repository ready and, if needed, disconnects the inherited `origin` — without
-that, your first `git push` would go to the template's repo.
+**The project's repository and the template's are always two different
+repositories**, and `--repo` is where you say so. The workspace ends up with
+two remotes: `origin` is yours, `template` is the harness. Without `--repo`
+the script disconnects the inherited `origin` instead and reminds you to add
+your own — because otherwise your first `git push` would go to the template's
+repo. If you **cloned** this template instead of copying it, add `-ResetGit`
+so you do not drag its history along.
 
 Then, in this order:
 
@@ -77,12 +80,43 @@ If you prefer to write the requirements by hand, you can: copy
 `specs/_req_template.md`, fill in `docs/architecture.md` and add the features
 to `feature_list.json` yourself. The harness validates the same either way.
 
+## Reusing the template for the next project
+
+One local copy, many projects, one after another. When a project is finished
+and pushed to **its own** repository, this folder becomes the next one:
+
+```powershell
+./reset.ps1 -Name "ecommerce" -Repo "https://github.com/me/ecommerce.git" -WhatIf
+./reset.ps1 -Name "ecommerce" -Repo "https://github.com/me/ecommerce.git"
+```
+
+```bash
+./reset.sh --name "ecommerce" --repo "https://github.com/me/ecommerce.git" --dry-run
+./reset.sh --name "ecommerce" --repo "https://github.com/me/ecommerce.git"
+```
+
+Everything git tracked in the previous project is deleted, the template's tree
+is written in its place, and everything git ignored stays where it is and is
+listed at the end. Then the new project is instantiated on top, with a fresh
+history and `origin` pointing at its own repository. The previous project's
+repository is not touched — its history lives there, and a backup bundle of
+it is written next to this folder anyway.
+
+It reads the pristine template from the `template` remote, and refuses before
+deleting anything if there are uncommitted changes, stashes or commits that
+are not pushed. Whatever state the project is in, `--force` gets past that —
+and `--dry-run` shows you the whole list first.
+
+Both scripts are on the agent's `deny` list: resetting deletes a project's
+working copy, and that decision is yours. Details in **`docs/scripts.md`**.
+
 ## Scripts
 
 | Script | Who runs it | When |
 |--------|-------------|------|
 | `init.ps1` / `init.sh` | agent, `Stop` hook, reviewer | when starting the session and before any `done` |
 | `bootstrap.ps1` / `bootstrap.sh` | human | once, when instantiating the project |
+| `reset.ps1` / `reset.sh` | human | when this folder is to host the next project |
 | `scripts/validate_project_setup.py` | `init.*` (and by hand) | blocks start-up if the project is not configured |
 | `scripts/validate_requirements.py` | `init.*` (and by hand) | blocks work on an unapproved requirement |
 | `scripts/approve.py` | `/approve`, `/approve-all` | when you sign requirements |
@@ -100,8 +134,9 @@ Windows and the `.sh` on WSL, macOS, Linux or CI. If you touch one, touch the
 other — and CI checks they declare the same sections, so "if you touch one"
 does not depend on anyone remembering.
 
-Same for `bootstrap.ps1` and `bootstrap.sh`, except there are no two
-implementations there: both call `scripts/instantiate.py`.
+Same for `bootstrap.ps1` / `bootstrap.sh` and for `reset.ps1` / `reset.sh`,
+except there are no two implementations there: they call
+`scripts/instantiate.py` and `scripts/reset_workspace.py`.
 
 The hooks in `.claude/settings.json` no longer depend on the platform: they are
 `python scripts/harness_hook.py`, and the script picks `init.ps1` or `init.sh`
@@ -194,6 +229,8 @@ as the subagent finishes. That is how you audit, step by step, who decided what.
 ├── init.sh                          # Verifier (POSIX)
 ├── bootstrap.ps1                    # Instantiates a new project (Windows)
 ├── bootstrap.sh                     # Instantiates a new project (POSIX)
+├── reset.ps1                        # Returns the folder to the template (Windows)
+├── reset.sh                         # Returns the folder to the template (POSIX)
 ├── docs/
 │   ├── architecture.md              # What "good work" means (the analyst drafts it, you approve it)
 │   ├── conventions.md               # Style, names, errors
@@ -215,6 +252,7 @@ as the subagent finishes. That is how you audit, step by step, who decided what.
 │   ├── approve.py                   # Signs the requirements you name
 │   ├── validate_references.py       # Keeps the docs from pointing at missing files
 │   ├── instantiate.py               # The bootstrap logic, shared by both platforms
+│   ├── reset_workspace.py           # The reset logic, shared by both platforms
 │   ├── tests/                       # The harness's own tests (init.* does not run them)
 │   ├── harness_hook.py              # The hooks: tests after each edit, verifier on close
 │   └── demo_orchestration.py        # Demo of the Leader-Worker pattern

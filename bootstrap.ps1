@@ -14,7 +14,8 @@
          `impl_*.md`, `review_*.md`, `intake_*.md`) if any are left.
       5. Creates `specs/` and deletes the previous project's requirements
          (`specs/REQ-*.md`), which no longer have features to point at.
-      6. Leaves the git repository ready and disconnects the inherited `origin`.
+      6. Leaves the git repository ready with two remotes: `origin` (yours)
+         and `template` (the harness).
 
     A human runs it ONCE. **It is not on the agent's allow list**:
     instantiating empties the scope and deletes the requirements, and that
@@ -37,6 +38,15 @@
 .PARAMETER Description
     One line describing the project. If omitted, the placeholder stays.
 
+.PARAMETER Repo
+    URL of YOUR project's repository. It becomes `origin`; the URL the clone
+    came from is kept as `template`, which is what lets you reset this folder
+    later for the next project. Passing the template's own URL is refused.
+
+.PARAMETER TemplateRepo
+    URL of the harness's repository. Only needed when it cannot be worked out
+    from the current `origin` (you copied the template instead of cloning it).
+
 .PARAMETER Force
     Instantiate even if the repository is already a project, and reset
     `progress/history.md` even if it has entries.
@@ -58,7 +68,7 @@
     ./bootstrap.ps1 -Name "my-project" -ResetGit
 
 .EXAMPLE
-    ./bootstrap.ps1 -Name "my-project" -Description "Daily ingestion pipeline."
+    ./bootstrap.ps1 -Name "my-project" -Description "Daily ingestion pipeline." -Repo "https://github.com/me/my-project.git"
 
 .OUTPUTS
     [OK] / [WARN] lines per change applied, and a closing checklist.
@@ -73,6 +83,10 @@ param(
     [string]$Name,
 
     [string]$Description = "",
+
+    [string]$Repo = "",
+
+    [string]$TemplateRepo = "",
 
     [switch]$Force,
 
@@ -100,7 +114,9 @@ if (-not $Py) {
 }
 
 $Arguments = @("scripts/instantiate.py", "--name", $Name)
-if ($Description) { $Arguments += @("--description", $Description) }
+if ($Description)  { $Arguments += @("--description", $Description) }
+if ($Repo)         { $Arguments += @("--repo", $Repo) }
+if ($TemplateRepo) { $Arguments += @("--template-repo", $TemplateRepo) }
 if ($Force)       { $Arguments += "--force" }
 if ($ResetGit)    { $Arguments += "--reset-git" }
 if ($NoGit)       { $Arguments += "--no-git" }

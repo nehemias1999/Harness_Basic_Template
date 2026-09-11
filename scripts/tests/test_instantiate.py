@@ -13,6 +13,8 @@ import argparse
 import io
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -62,6 +64,9 @@ class InstantiateCase(unittest.TestCase):
         options = {
             "name": "my-project",
             "description": "Does something.",
+            "repo": "",
+            "template_repo": "",
+            "branch": "",
             "force": False,
             "reset_git": False,
             "no_git": True,
@@ -169,6 +174,72 @@ class TestCleanup(InstantiateCase):
         self.write("specs/_req_template.md", "template\n")
         self.run_it()
         self.assertTrue(self.exists("specs/_req_template.md"))
+
+
+@unittest.skipUnless(shutil.which("git"), "git is needed for these tests")
+class TestTheTwoRemotes(InstantiateCase):
+    """`origin` is your project, `template` is the harness.
+
+    Everything runs against a local repository: no network, no real remote.
+    """
+
+    TEMPLATE_URL = "https://example.invalid/someone/the-harness.git"
+    PROJECT_URL = "https://example.invalid/me/my-project.git"
+
+    def setUp(self) -> None:
+        super().setUp()
+        # The workspace as it looks after cloning the template: a repository
+        # whose `origin` is the harness.
+        self.git("init", "--quiet", "-b", "main")
+        self.git("config", "user.email", "test@localhost")
+        self.git("config", "user.name", "Test")
+        self.git("remote", "add", "origin", self.TEMPLATE_URL)
+        self.git("add", "-A")
+        self.git("commit", "--quiet", "-m", "harness")
+
+    def git(self, *arguments: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["git", *arguments], cwd=self.root, capture_output=True, text=True
+        )
+
+    def remote(self, name: str) -> str:
+        return self.git("remote", "get-url", name).stdout.strip()
+
+    def run_git(self, **kwargs) -> tuple[int, str]:
+        return self.run_it(no_git=False, reset_git=True, **kwargs)
+
+    def test_the_template_is_whatever_origin_was(self) -> None:
+        # Nobody has to type --template-repo: you cloned the harness to get
+        # here, so `origin` already holds its URL.
+        code, _output = self.run_git(repo=self.PROJECT_URL)
+        self.assertEqual(code, 0)
+        self.assertEqual(self.remote("template"), self.TEMPLATE_URL)
+        self.assertEqual(self.remote("origin"), self.PROJECT_URL)
+
+    def test_the_flag_wins_over_what_origin_says(self) -> None:
+        other = "https://example.invalid/fork/harness.git"
+        self.run_git(repo=self.PROJECT_URL, template_repo=other)
+        self.assertEqual(self.remote("template"), other)
+
+    def test_the_new_history_keeps_the_templates_branch(self) -> None:
+        # Not `init.defaultBranch`: this machine's may well be `master`.
+        self.run_git(repo=self.PROJECT_URL)
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip(), "main")
+        self.assertEqual(self.git("rev-list", "--count", "HEAD").stdout.strip(), "1")
+
+    def test_repo_equal_to_the_template_is_refused(self) -> None:
+        code, output = self.run_git(repo=self.TEMPLATE_URL)
+        self.assertEqual(code, 1)
+        self.assertIn("template's own URL", output)
+
+    def test_with_no_repo_origin_is_disconnected_from_the_harness(self) -> None:
+        # Leaving it in place is how a project's first push lands on the
+        # harness's repository.
+        code, output = self.run_git()
+        self.assertEqual(code, 0)
+        self.assertEqual(self.remote("origin"), "")
+        self.assertEqual(self.remote("template"), self.TEMPLATE_URL)
+        self.assertIn("git remote add origin", output)
 
 
 if __name__ == "__main__":
