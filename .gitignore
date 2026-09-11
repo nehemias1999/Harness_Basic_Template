@@ -4,11 +4,11 @@ __pycache__/
 .venv/
 .pytest_cache/
 
-# Arnés
+# Harness
 harness_init.log
 progress/*.tmp
 
-# Temporales / SO
+# Temporary / OS
 *.tmp
 .DS_Store
 Thumbs.db

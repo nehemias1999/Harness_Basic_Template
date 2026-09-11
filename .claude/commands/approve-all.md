@@ -1,20 +1,21 @@
 ---
-description: Firma todos los requisitos en draft de una vez.
+description: Signs every requirement in draft in one go.
 ---
 
-Atajo de `/approve all`. Ejecutá:
+Shortcut for `/approve all`. Run:
 
 ```bash
 python scripts/approve.py all
 ```
 
-Antes de correrlo, **decile al humano qué va a firmar**: los ids y títulos de
-los requisitos en `draft`, sacados de `specs/`. Aprobar todo junto es cómodo
-cuando venís de una ronda que revisaste entera, y es un error caro cuando se te
-coló uno que no habías leído. Que lo vea antes, no después.
+Before running it, **tell the human what it is about to sign**: the ids and
+titles of the requirements in `draft`, taken from `specs/`. Approving
+everything at once is convenient when you have just reviewed a whole round, and
+an expensive mistake when one you had not read slipped in. Let them see it
+before, not after.
 
-Si quiere firmar además `docs/architecture.md`, eso se nombra aparte:
+If they also want to sign `docs/architecture.md`, that is named separately:
 `/approve all architecture`.
 
-El resto del recorrido —verificador, entrada en `progress/history.md`, cuál es
-la siguiente feature— está en `/approve`, y es el mismo.
+The rest of the walkthrough — verifier, entry in `progress/history.md`, which
+feature comes next — lives in `/approve`, and it is the same.

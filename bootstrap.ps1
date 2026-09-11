@@ -1,71 +1,71 @@
 <#
 .SYNOPSIS
-    Instancia un proyecto nuevo a partir de esta plantilla de arnés (Windows).
+    Instantiates a new project from this harness template (Windows).
 
 .DESCRIPTION
-    Rellena los placeholders del template y deja el repositorio en estado
-    "proyecto recién empezado":
+    Fills in the template's placeholders and leaves the repository in a
+    "project just started" state:
 
-      1. `feature_list.json` -> escribe project/description y vacía `features`.
-      2. Sustituye `<TU_PROYECTO>` y `<DESCRIPCION_PROYECTO>` en README.md y
-         en docs/architecture.md, conventions.md y verification.md.
-      3. Resetea `progress/current.md` y `progress/history.md` a su plantilla.
-      4. Borra informes de sesiones anteriores (`progress/explore_*.md`,
-         `impl_*.md`, `review_*.md`, `intake_*.md`) si quedara alguno.
-      5. Crea `specs/` y borra los requisitos del proyecto anterior
-         (`specs/REQ-*.md`), que ya no tienen features a las que apuntar.
-      6. Deja el repositorio git listo y desconecta el `origin` heredado.
+      1. `feature_list.json` -> writes project/description and empties `features`.
+      2. Replaces `<YOUR_PROJECT>` and `<PROJECT_DESCRIPTION>` in README.md and
+         in docs/architecture.md, conventions.md and verification.md.
+      3. Resets `progress/current.md` and `progress/history.md` to their template.
+      4. Deletes previous sessions' reports (`progress/explore_*.md`,
+         `impl_*.md`, `review_*.md`, `intake_*.md`) if any are left.
+      5. Creates `specs/` and deletes the previous project's requirements
+         (`specs/REQ-*.md`), which no longer have features to point at.
+      6. Leaves the git repository ready and disconnects the inherited `origin`.
 
-    Lo ejecuta un humano UNA vez. **No está en la lista de permisos del
-    agente**: instanciar vacía el alcance y borra los requisitos, y esa
-    decisión es tuya. Sobre un repositorio que ya es un proyecto se planta y
-    exige `-Force`.
+    A human runs it ONCE. **It is not on the agent's allow list**:
+    instantiating empties the scope and deletes the requirements, and that
+    decision is yours. On a repository that is already a project it refuses and
+    demands `-Force`.
 
-    Este script es un wrapper de `scripts/instanciar.py`, igual que
-    `bootstrap.sh`. La lógica vive allí por el mismo motivo que la de los
-    validadores: duplicar 200 líneas de decisiones sobre qué borrar en dos
-    dialectos garantiza que un día digan cosas distintas.
+    This script is a wrapper around `scripts/instantiate.py`, just like
+    `bootstrap.sh`. The logic lives there for the same reason the validators'
+    does: duplicating 200 lines of decisions about what to delete in two
+    dialects guarantees that one day they will say different things.
 
-    Lo que NO hace: definir el alcance por ti. El borrador de
-    `docs/architecture.md` y los requisitos los redacta el agente `analyst`
-    (`/requisitos`), pero **aprobarlos es tuyo** y hasta que lo hagas el
-    verificador no se pone verde.
+    What it does NOT do: define the scope for you. The draft of
+    `docs/architecture.md` and the requirements are written by the `analyst`
+    agent (`/requirements`), but **approving them is yours** and until you do
+    the verifier does not go green.
 
 .PARAMETER Name
-    Nombre del proyecto nuevo (obligatorio).
+    Name of the new project (required).
 
 .PARAMETER Description
-    Una línea describiendo el proyecto. Si se omite, deja el placeholder.
+    One line describing the project. If omitted, the placeholder stays.
 
 .PARAMETER Force
-    Instancia aunque el repositorio ya sea un proyecto, y reinicia
-    `progress/history.md` aunque tenga entradas.
+    Instantiate even if the repository is already a project, and reset
+    `progress/history.md` even if it has entries.
 
 .PARAMETER ResetGit
-    Borra el `.git` heredado de la plantilla y empieza un historial nuevo.
-    Úsalo cuando hayas CLONADO el template: sin esto te quedas con sus commits.
+    Delete the `.git` inherited from the template and start a new history.
+    Use it when you CLONED the template: without this you keep its commits.
 
 .PARAMETER NoGit
-    No toca git en absoluto. Para cuando gestionas el repositorio a mano.
+    Do not touch git at all. For when you manage the repository by hand.
 
 .PARAMETER WhatIf
-    Lista los cambios sin aplicarlos.
+    List the changes without applying them.
 
 .EXAMPLE
-    ./bootstrap.ps1 -Name "mi-proyecto" -WhatIf
+    ./bootstrap.ps1 -Name "my-project" -WhatIf
 
 .EXAMPLE
-    ./bootstrap.ps1 -Name "mi-proyecto" -ResetGit
+    ./bootstrap.ps1 -Name "my-project" -ResetGit
 
 .EXAMPLE
-    ./bootstrap.ps1 -Name "mi-proyecto" -Description "Pipeline de ingesta diaria."
+    ./bootstrap.ps1 -Name "my-project" -Description "Daily ingestion pipeline."
 
 .OUTPUTS
-    Líneas [OK] / [WARN] por cada cambio aplicado, y una checklist final.
+    [OK] / [WARN] lines per change applied, and a closing checklist.
 
 .NOTES
-    Exit codes: 0 instanciado · 1 faltan archivos, o ya era un proyecto.
-    Después de ejecutarlo, valida con ./init.ps1.
+    Exit codes: 0 instantiated · 1 files missing, or already a project.
+    After running it, validate with ./init.ps1.
 #>
 [CmdletBinding()]
 param(
@@ -85,8 +85,8 @@ param(
 
 Set-Location -Path $PSScriptRoot
 
-# Mismo sondeo que init.ps1: hay que descartar los stubs que existen en el PATH
-# pero no ejecutan nada (el alias `python3` de la Microsoft Store, por ejemplo).
+# Same probe as init.ps1: the stubs that exist on PATH but run nothing have to
+# be discarded (the Microsoft Store's `python3` alias, for example).
 $Py = $null
 foreach ($candidate in @("python", "py", "python3")) {
     if (-not (Get-Command $candidate -ErrorAction SilentlyContinue)) { continue }
@@ -95,16 +95,16 @@ foreach ($candidate in @("python", "py", "python3")) {
 }
 
 if (-not $Py) {
-    Write-Host "[FAIL]  No se encontró un Python ejecutable: el arnés lo necesita (ver docs/scripts.md)" -ForegroundColor Red
+    Write-Host "[FAIL]  No runnable Python found: the harness needs it (see docs/scripts.md)" -ForegroundColor Red
     exit 1
 }
 
-$Argumentos = @("scripts/instanciar.py", "--name", $Name)
-if ($Description) { $Argumentos += @("--description", $Description) }
-if ($Force)       { $Argumentos += "--force" }
-if ($ResetGit)    { $Argumentos += "--reset-git" }
-if ($NoGit)       { $Argumentos += "--no-git" }
-if ($WhatIf)      { $Argumentos += "--dry-run" }
+$Arguments = @("scripts/instantiate.py", "--name", $Name)
+if ($Description) { $Arguments += @("--description", $Description) }
+if ($Force)       { $Arguments += "--force" }
+if ($ResetGit)    { $Arguments += "--reset-git" }
+if ($NoGit)       { $Arguments += "--no-git" }
+if ($WhatIf)      { $Arguments += "--dry-run" }
 
-& $Py @Argumentos
+& $Py @Arguments
 exit $LASTEXITCODE

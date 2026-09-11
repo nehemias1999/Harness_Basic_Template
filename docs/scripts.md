@@ -1,508 +1,538 @@
-# Scripts del arnés
+# Harness scripts
 
-> La caja de herramientas del repositorio. Cada script lleva además su propia
-> cabecera de documentación (`Get-Help ./init.ps1` en PowerShell, o las primeras
-> líneas del archivo); aquí está el panorama y los detalles que no caben en una
-> cabecera.
+> The repository's toolbox. Every script also carries its own documentation
+> header (`Get-Help ./init.ps1` in PowerShell, or the first lines of the file);
+> here is the overview and the details that do not fit in a header.
 
-| Script | Quién lo ejecuta | Cuándo |
-|--------|------------------|--------|
-| `init.ps1` / `init.sh` | agente, hook `Stop`, reviewer | al arrancar la sesión y antes de todo `done` |
-| `bootstrap.ps1` / `bootstrap.sh` | humano | una vez, al instanciar un proyecto nuevo desde la plantilla |
-| `scripts/validate_project_setup.py` | `init.*` (y a mano) | bloquea el arranque si el proyecto no está configurado |
-| `scripts/validate_feature_list.py` | `init.*` (y a mano) | siempre que haya que comprobar el alcance |
-| `scripts/validate_requirements.py` | `init.*` (y a mano) | bloquea si se está trabajando sobre un requisito sin aprobar |
-| `scripts/harness_hook.py` | hooks `PostToolUse` y `Stop` | automático; bloquean con exit 2 |
-| `scripts/approve.py` | `/approve` y `/approve-all` | cuando el humano firma requisitos |
-| `scripts/validate_referencias.py` | `/harness-check` y el CI | para que la documentación no mande a archivos que no existen |
-| `scripts/instanciar.py` | `bootstrap.ps1` y `bootstrap.sh` | la lógica de instanciación, compartida por las dos plataformas |
-| `scripts/demo_orchestration.py` | humano o agente | para entender o demostrar el patrón anti-teléfono-descompuesto |
-| `.github/workflows/harness.yml` | GitHub Actions | en cada push y cada PR |
-
----
-
-## `init.ps1` / `init.sh` — el verificador
-
-Son **el mismo verificador en dos plataformas**: misma estructura de 7 secciones,
-misma salida `[OK]/[WARN]/[FAIL]`, mismo exit code. Usa `init.ps1` en Windows y
-`init.sh` en WSL, macOS, Linux o CI. Si cambias uno, cambia el otro.
-
-```
-1. Entorno            intérprete de Python detectado y >= 3.9
-2. Archivos base      los 8 archivos sin los que el arnés no funciona
-3. Configuración      delega en scripts/validate_project_setup.py  (bloqueante)
-4. feature_list.json  delega en scripts/validate_feature_list.py
-5. Requisitos         delega en scripts/validate_requirements.py   (bloqueante)
-6. Tests              descubre y ejecuta tests/
-7. Resumen            veredicto + exit code
-```
-
-La 5 va **después** de la 4 a propósito: si `feature_list.json` está roto de
-forma, el lector ve primero el error de forma y no una cascada de errores de
-trazabilidad derivados de él.
-
-**Parámetros:** `init.sh` no tiene ninguno. `init.ps1` acepta `-Quiet` para
-resumir la salida de los tests.
-
-**Exit codes:** `0` entorno listo · `1` hay algo que resolver.
-Los `[WARN]` **no** bloquean; los `[FAIL]` sí.
-
-**Detalles que importan:**
-
-- **Detección de intérprete.** Prueba `python`, `py` y `python3`, y descarta los
-  que existen en el PATH pero no ejecutan nada — en Windows el alias `python3` de
-  la Microsoft Store es un stub que solo imprime un aviso de instalación. Por eso
-  el script no se fía de `command -v` / `Get-Command`: lanza una sonda real.
-- **La plantilla sin instanciar sale en rojo, y es correcto.** La sección 3
-  bloquea el arranque mientras el proyecto no esté configurado. Un repo recién
-  copiado te dice qué ejecutar (`bootstrap.ps1`) en vez de dejarte trabajar sobre
-  un arnés vacío. No es un fallo del template: es el template haciendo su trabajo.
-- **0 tests es `[WARN]`, no `[OK]`.** `unittest discover` sobre una carpeta vacía
-  termina con éxito, así que un repo recién instanciado parecería verde sin haber
-  verificado nada. El verificador cuenta los tests antes de ejecutarlos y
-  distingue tres casos: *0 tests* (aviso), *tests en verde* (ok), *tests rotos*
-  (fallo). Cuando tu proyecto ya tiene código, un `[WARN]` aquí es una señal de
-  alarma, no ruido.
-
-**Cuando falla:**
-
-| Línea | Qué hacer |
-|-------|-----------|
-| `No se encontró un Python ejecutable` | instala Python >= 3.9 o arregla el PATH |
-| `Falta archivo base: X` | el arnés está incompleto: recupera `X` (ver `CHECKPOINTS.md` C1) |
-| `Este repositorio es la plantilla del arnés SIN INSTANCIAR` | ejecuta `./bootstrap.ps1 -Name "..."` |
-| `docs/architecture.md tiene placeholders sin rellenar` | pídeselo al `analyst` (`/requirements`); es el criterio del reviewer, sin él no hay revisión posible |
-| `sigue en estado "draft" (nadie aprobó ese requisito)` | el humano lo aprueba con `/approve <id>`, o se devuelve la feature a `draft` |
-| `"rules.…" vale … y el arnés trabaja con …` | alguien aflojó una regla del arnés editando `feature_list.json`: devuélvela a su valor |
-| `ni un solo test en tests/` | una feature `done` sin pruebas: escribe los tests o reabre la feature |
-| `aprobado_el … tiene que ser una fecha` | pon la fecha real de aprobación en formato `AAAA-MM-DD` |
-| `el frontmatter repite …` | hay dos veces la misma clave en el spec: deja una |
-| `apunta a specs/... que no existe` | corrige el campo `spec` de la feature, o recupera el archivo |
-| `está aprobado pero ninguna feature lo referencia` | deriva sus features (`/requirements`) o vuelve el spec a `draft` |
-| `y ningún requisito aprobado` | hay código sin alcance aprobado: define y aprueba los requisitos antes de seguir |
-| `Hay N features en in_progress` | cierra o revierte las features de más: una a la vez |
-| `No se pudieron descubrir los tests` | hay un error de import en `tests/`; ejecuta el discover a mano para verlo |
-| `Hay tests rotos` | arréglalos antes de seguir; no marques nada `done` |
+| Script | Who runs it | When |
+|--------|-------------|------|
+| `init.ps1` / `init.sh` | agent, `Stop` hook, reviewer | when starting the session and before any `done` |
+| `bootstrap.ps1` / `bootstrap.sh` | human | once, when instantiating a new project from the template |
+| `scripts/validate_project_setup.py` | `init.*` (and by hand) | blocks start-up if the project is not configured |
+| `scripts/validate_feature_list.py` | `init.*` (and by hand) | whenever the scope needs checking |
+| `scripts/validate_requirements.py` | `init.*` (and by hand) | blocks work on an unapproved requirement |
+| `scripts/harness_hook.py` | `PostToolUse` and `Stop` hooks | automatic; they block with exit 2 |
+| `scripts/approve.py` | `/approve` and `/approve-all` | when the human signs requirements |
+| `scripts/validate_references.py` | `/harness-check` and CI | to keep the docs from pointing at missing files |
+| `scripts/instantiate.py` | `bootstrap.ps1` and `bootstrap.sh` | the instantiation logic, shared by both platforms |
+| `scripts/demo_orchestration.py` | human or agent | to understand or demonstrate the anti-broken-telephone pattern |
+| `.github/workflows/harness.yml` | GitHub Actions | on every push and every PR |
 
 ---
 
-## `bootstrap.ps1` / `bootstrap.sh` — instanciar un proyecto
+## `init.ps1` / `init.sh` — the verifier
 
-Convierte la plantilla en tu proyecto. Se ejecuta **una vez**, a mano, justo
-después de copiar el repo.
+They are **the same verifier on two platforms**: same 7-section structure, same
+`[OK]/[WARN]/[FAIL]` output, same exit code. Use `init.ps1` on Windows and
+`init.sh` on WSL, macOS, Linux or CI. If you change one, change the other.
+
+```
+1. Environment        Python interpreter found and >= 3.9
+2. Base files         the files without which the harness does not work
+3. Configuration      delegates to scripts/validate_project_setup.py  (blocking)
+4. feature_list.json  delegates to scripts/validate_feature_list.py
+5. Requirements       delegates to scripts/validate_requirements.py   (blocking)
+6. Tests              discovers and runs tests/
+7. Summary            verdict + exit code
+```
+
+Section 5 comes **after** 4 on purpose: if `feature_list.json` is malformed,
+the reader sees the shape error first rather than a cascade of traceability
+errors derived from it.
+
+**Parameters:** both accept `--quiet` / `-Quiet` to shorten the test output.
+
+**Exit codes:** `0` environment ready · `1` something to fix. `[WARN]`s do
+**not** block; `[FAIL]`s do.
+
+**Details that matter:**
+
+- **Interpreter detection.** It tries `python`, `py` and `python3`, and
+  discards the ones that exist on PATH but run nothing — on Windows the
+  Microsoft Store's `python3` alias is a stub that only prints an install
+  notice. That is why the script does not trust `command -v` / `Get-Command`:
+  it fires a real probe.
+- **The uninstantiated template comes out red, and that is correct.** Section 3
+  blocks start-up while the project is not configured. A freshly copied repo
+  tells you what to run (`bootstrap.ps1`) instead of letting you work on an
+  empty harness. It is not a template bug: it is the template doing its job.
+- **0 tests is a `[WARN]`, not an `[OK]`.** `unittest discover` over an empty
+  folder finishes successfully, so a freshly instantiated repo would look green
+  without having verified anything. The verifier counts the tests before
+  running them and tells three cases apart: *0 tests* (warning), *green tests*
+  (ok), *broken tests* (failure). Once your project has code, a `[WARN]` here
+  is an alarm, not noise.
+
+**When it fails:**
+
+| Line | What to do |
+|------|------------|
+| `No runnable Python found` | install Python >= 3.9 or fix the PATH |
+| `Base file missing: X` | the harness is incomplete: restore `X` (see `CHECKPOINTS.md` C1) |
+| `This repository is the harness template, NOT INSTANTIATED` | run `./bootstrap.ps1 -Name "..."` |
+| `docs/architecture.md has unfilled placeholders` | ask the `analyst` for it (`/requirements`); it is the reviewer's criterion, without it no review is possible |
+| `is still "draft" (nobody approved that requirement)` | the human approves it with `/approve <id>`, or the feature goes back to `draft` |
+| `"rules.…" says … and the harness works with …` | somebody loosened a harness rule by editing `feature_list.json`: put it back |
+| `not a single test in tests/` | a `done` feature with no proof: write the tests or reopen the feature |
+| `approved_on … has to be a YYYY-MM-DD date` | put the real approval date in |
+| `the front matter repeats …` | the same key appears twice in the spec: keep one |
+| `points at specs/... which does not exist` | fix the feature's `spec` field, or restore the file |
+| `is approved but no feature references it` | derive its features (`/requirements`) or send the spec back to `draft` |
+| `and no approved requirement` | there is code with no approved scope: define and approve the requirements before going on |
+| `There are N features in_progress` | close or revert the extra ones: one at a time |
+| `Could not discover the tests` | there is an import error in `tests/`; run the discover by hand to see it |
+| `There are broken tests` | fix them before going on; do not mark anything `done` |
+
+---
+
+## `bootstrap.ps1` / `bootstrap.sh` — instantiating a project
+
+Turns the template into your project. It runs **once**, by hand, right after
+copying the repo.
 
 ```powershell
-./bootstrap.ps1 -Name "mi-proyecto" -WhatIf                       # ensayo en seco
-./bootstrap.ps1 -Name "mi-proyecto" -Description "Qué hace."      # de verdad
-./bootstrap.ps1 -Name "otro" -Force                               # insiste sobre un proyecto vivo
+./bootstrap.ps1 -Name "my-project" -WhatIf                          # dry run
+./bootstrap.ps1 -Name "my-project" -Description "What it does."     # for real
+./bootstrap.ps1 -Name "other" -Force                                # insist on a live project
 ```
 
 ```bash
-./bootstrap.sh --name "mi-proyecto" --dry-run                     # ensayo en seco
-./bootstrap.sh --name "mi-proyecto" --description "Qué hace."     # de verdad
+./bootstrap.sh --name "my-project" --dry-run                        # dry run
+./bootstrap.sh --name "my-project" --description "What it does."    # for real
 ```
 
-| Windows | POSIX | Efecto |
+| Windows | POSIX | Effect |
 |---------|-------|--------|
-| `-Name` | `--name` | obligatorio; nombre del proyecto |
-| `-Description` | `--description` | una línea; si se omite, deja el placeholder |
-| `-Force` | `--force` | instancia aunque ya sea un proyecto, y reinicia `history.md` |
-| `-ResetGit` | `--reset-git` | borra el `.git` heredado y empieza un historial nuevo |
-| `-NoGit` | `--no-git` | no toca git en absoluto |
-| `-WhatIf` | `--dry-run` | lista los cambios sin aplicarlos |
+| `-Name` | `--name` | required; the project's name |
+| `-Description` | `--description` | one line; if omitted, the placeholder stays |
+| `-Force` | `--force` | instantiate even if it is already a project, and reset `history.md` |
+| `-ResetGit` | `--reset-git` | delete the inherited `.git` and start a new history |
+| `-NoGit` | `--no-git` | do not touch git at all |
+| `-WhatIf` | `--dry-run` | list the changes without applying them |
 
-**Los dos son wrappers de `scripts/instanciar.py`**, que es donde vive la
-lógica. Son ~200 líneas de decisiones sobre qué borrar y qué conservar:
-mantenerlas duplicadas en PowerShell y en bash garantizaba que un día dijeran
-cosas distintas, que es el mismo motivo por el que los validadores son módulos
-Python compartidos. Los wrappers solo traducen argumentos y buscan el
-intérprete.
+**Both are wrappers around `scripts/instantiate.py`**, which is where the logic
+lives. They are ~200 lines of decisions about what to delete and what to keep:
+keeping them duplicated in PowerShell and bash guaranteed that one day they
+would say different things, which is the same reason the validators are shared
+Python modules. The wrappers only translate arguments and find the interpreter.
 
-Qué toca: `feature_list.json` (nombre, descripción, **`features: []`**), los
-placeholders de `README.md` y de `docs/architecture.md`, `conventions.md` y
-`verification.md`, `progress/current.md`, `progress/history.md`, borra los
-informes residuales (`progress/explore_*.md`, `impl_*.md`, `review_*.md`,
-`intake_*.md`) y **borra todos los requisitos de `specs/REQ-*.md`**, aprobados
-incluidos.
+What it touches: `feature_list.json` (name, description, **`features: []`**),
+the placeholders in `README.md` and in `docs/architecture.md`, `conventions.md`
+and `verification.md`, `progress/current.md`, `progress/history.md`, it deletes
+the leftover reports (`progress/explore_*.md`, `impl_*.md`, `review_*.md`,
+`intake_*.md`) and it **deletes every requirement in `specs/REQ-*.md`**,
+approved ones included.
 
-La lista de archivos con placeholders es explícita a propósito: este archivo y
-`CHECKPOINTS.md` *hablan* de los placeholders, así que sustituirlos aquí
-destrozaría su propia documentación.
+The list of files with placeholders is explicit on purpose: this file and
+`CHECKPOINTS.md` *talk about* the placeholders, so replacing them here would
+wreck their own documentation.
 
-**No es idempotente y no es inofensivo**: vacía el alcance y borra los
-requisitos. Por eso se planta si el repositorio ya es un proyecto instanciado
-—tiene nombre propio o requisitos en `specs/`— y hay que pasarle `-Force` para
-insistir. Ese es el guardarraíl que importa; el `ShouldProcess` del script no
-pregunta nada con la configuración por defecto de PowerShell.
+**It is not idempotent and it is not harmless**: it empties the scope and
+deletes the requirements. That is why it refuses if the repository is already
+an instantiated project — it has its own name or requirements in `specs/` — and
+you have to pass `-Force` to insist. That is the guardrail that matters; the
+script's `ShouldProcess` asks nothing with PowerShell's default configuration.
 
-`progress/history.md` tiene además su propia protección: si tiene entradas
-reales, avisa y no lo borra salvo `-Force`.
+`progress/history.md` also has its own protection: if it has real entries, it
+warns and does not delete it unless `-Force`.
 
-Y no está en la lista de permisos del agente, está en `deny`: instanciar un
-proyecto es un acto humano.
+And it is not on the agent's allow list, it is on `deny`: instantiating a
+project is a human act.
 
-### Lo que hace con git
+### What it does with git
 
-El reviewer identifica los archivos tocados en una sesión comparando contra el
-historial. Un proyecto sin repositorio lo deja trabajando a ciegas, con lo único
-que le queda: el informe del propio implementer, que es justo a quien tiene que
-auditar. Así que el script deja el repositorio en condiciones:
+The reviewer identifies the files touched in a session by comparing against
+history. A project with no repository leaves it working blind, with the only
+thing it has left: the implementer's own report, which is exactly who it has to
+audit. So the script leaves the repository in shape:
 
-| Situación de partida | Qué hace |
+| Starting situation | What it does |
 |---|---|
-| Copiaste la plantilla (no hay `.git`) | `git init` + commit base `chore: instancia el arnés para <proyecto>` |
-| **Clonaste** la plantilla (hay `.git` con `origin` al template) | **desconecta `origin`** y avisa de que conservas el historial de la plantilla |
-| Clonaste y pasas `-ResetGit` | borra el `.git` heredado y arranca un historial limpio |
-| Repo propio con otro `origin` | lo deja como está |
-| `-NoGit` | nada, con un `[WARN]` |
+| You copied the template (no `.git`) | `git init` + base commit `chore: instantiate the harness for <project>` |
+| You **cloned** the template (there is a `.git` with `origin` at the template) | **disconnects `origin`** and warns you are keeping the template's history |
+| You cloned and pass `-ResetGit` | deletes the inherited `.git` and starts a clean history |
+| Your own repo with another `origin` | leaves it alone |
+| `-NoGit` | nothing, with a `[WARN]` |
 
-Lo de desconectar el `origin` no es cosmético: si clonas el template y no lo
-tocas, **tu primer `git push` manda el proyecto nuevo al repositorio de la
-plantilla**. Cuando lo desconecta, la checklist final añade un paso 6 con el
-`git remote add origin <url>` que te toca.
+Disconnecting the `origin` is not cosmetic: if you clone the template and leave
+it alone, **your first `git push` sends the new project to the template's
+repository**. When it disconnects it, the closing checklist adds a step 6 with
+the `git remote add origin <url>` that is on you.
 
-Si git no tiene identidad configurada, pone una local provisional
-(`harness@localhost`) para poder cerrar el commit base, y lo avisa. Cámbiala por
-la tuya antes de empezar a trabajar en serio.
+If git has no identity configured, it sets a provisional local one
+(`harness@localhost`) so the base commit can be made, and says so. Change it
+for your own before starting real work.
 
-**Qué NO hace:** rellenar `docs/architecture.md`. Ese archivo define qué es "un
-buen trabajo" en tu proyecto y es la referencia del reviewer — escribirlo es
-trabajo tuyo, y el script te lo recuerda en su checklist final.
+**What it does NOT do:** fill in `docs/architecture.md`. That file defines what
+"good work" means in your project and is the reviewer's reference — writing it
+is your job, and the script reminds you in its closing checklist.
 
-Después de ejecutarlo, `./init.ps1` debe quedar verde (con `[WARN]` en tests,
-porque todavía no hay código).
-
----
-
-## Permisos: `deny` gana sobre `allow`
-
-`.claude/settings.json` ya no pre-aprueba `bootstrap.ps1`: está en `deny`.
-Instanciar un proyecto es un acto humano —lo dicen `AGENTS.md` y este mismo
-documento— y el script vacía `features`, borra los requisitos de `specs/` y
-puede borrar `.git` entero. Tenerlo en `allow` significaba que un agente podía
-ejecutarlo sin una sola confirmación. Si necesitás correrlo, corrélo vos.
-
-Los patrones de `allow` son ahora **exactos**, sin comodines de sufijo. Un
-patrón como `PowerShell(./init.ps1*)` pre-aprobaba también
-`./init.ps1; Remove-Item -Recurse -Force .git`, porque el comodín cubre todo lo
-que venga detrás. Y `Bash(python scripts/*)` pre-aprobaba ejecutar **cualquier
-archivo que el propio agente acabara de escribir** en `scripts/`. El precio de
-la precisión es alguna confirmación de más; vale la pena.
+After running it, `./init.ps1` should come out green (with a `[WARN]` on tests,
+because there is no code yet).
 
 ---
 
-## `scripts/validate_project_setup.py` — no arrancar a medias
+## Permissions: `deny` beats `allow`
 
-Bloquea la sesión mientras falte lo imprescindible para que el arnés tenga
-sentido. La razón es concreta: el reviewer aprueba o rechaza comparando el código
-contra `docs/architecture.md`, así que **con ese archivo sin rellenar el reviewer
-no tiene criterio** y da por bueno cualquier código que pase los tests. Un arnés
-a medio configurar es peor que no tener arnés, porque parece que verifica.
+`.claude/settings.json` no longer pre-approves `bootstrap.ps1`: it is on
+`deny`. Instantiating a project is a human act — `AGENTS.md` and this very
+document say so — and the script empties `features`, deletes the requirements
+in `specs/` and can delete `.git` entirely. Having it on `allow` meant an agent
+could run it without a single confirmation. If you need to run it, run it
+yourself.
+
+The `allow` patterns are now **exact**, with no trailing wildcards. A pattern
+like `PowerShell(./init.ps1*)` also pre-approved
+`./init.ps1; Remove-Item -Recurse -Force .git`, because the wildcard covers
+everything that follows. And `Bash(python scripts/*)` pre-approved running
+**any file the agent had just written** into `scripts/`. The price of precision
+is the odd extra confirmation; it is worth it.
+
+---
+
+## `scripts/validate_project_setup.py` — do not start half-configured
+
+It blocks the session while anything essential for the harness to make sense is
+missing. The reason is concrete: the reviewer approves or rejects by comparing
+the code against `docs/architecture.md`, so **with that file unfilled the
+reviewer has no criteria** and takes any code that passes the tests as good. A
+half-configured harness is worse than no harness, because it looks like it
+verifies.
 
 ```bash
-python scripts/validate_project_setup.py          # el repo actual
-python scripts/validate_project_setup.py ../otro
+python scripts/validate_project_setup.py          # the current repo
+python scripts/validate_project_setup.py ../other
 ```
 
-**Bloquea (`[FAIL]`)** cuando:
+**It blocks (`[FAIL]`)** when:
 
-- `feature_list.json` sigue con el placeholder de `project`.
-- `docs/architecture.md` conserva placeholders `<...>` o su nota de plantilla.
-- `README.md` conserva `<TU_PROYECTO>` o `<DESCRIPCION_PROYECTO>`.
+- `feature_list.json` still carries the `project` placeholder.
+- `docs/architecture.md` keeps `<...>` placeholders or its template note, and
+  there is already a feature outside `draft`.
+- `README.md` keeps `<YOUR_PROJECT>` or `<PROJECT_DESCRIPTION>`.
 
-**Solo avisa (`[WARN]`)** cuando falta `description`, no hay features todavía o
-`src/` está vacío: son estados normales al principio de un proyecto.
+**It only warns (`[WARN]`)** when `description` is missing, there are no
+features yet, or `src/` is empty: those are normal states at the start of a
+project.
 
-**Caso especial:** si *nada* está configurado, el repo es la plantilla recién
-copiada. En vez de escupir todos los fallos, imprime el comando de `bootstrap.ps1`
-y para. Ese es el estado en el que vive este template en GitHub: **su verificador
-sale en rojo a propósito**.
+**Special case:** if *nothing* is configured, the repo is the freshly copied
+template. Instead of spitting out every failure, it prints the `bootstrap.ps1`
+command and stops. That is the state this template lives in on GitHub: **its
+verifier comes out red on purpose**.
 
-Exit codes: `0` configurado · `1` falta configuración imprescindible.
+Exit codes: `0` configured · `1` essential configuration missing.
 
 ---
 
-## `scripts/validate_feature_list.py` — validar el alcance
+## `scripts/validate_feature_list.py` — validating the scope
 
-Comprueba `feature_list.json`: campos obligatorios, tipos, ids y **nombres**
-únicos, estados y prioridades válidos, `acceptance` no vacío y **como mucho una
-feature `in_progress`** (la regla de "una feature a la vez" del arnés, hecha
-ejecutable). Los nombres tienen que ser únicos porque los informes del
-implementer y del reviewer se llaman por el `name` de la feature: dos iguales se
-pisan el informe.
+It checks `feature_list.json`: required fields, types, unique ids and **names**,
+valid statuses and priorities, non-empty `acceptance`, and **at most one
+`in_progress` feature** (the harness's "one feature at a time" rule, made
+executable). Names have to be unique because the implementer's and the
+reviewer's reports are named after the feature's `name`: two identical ones
+overwrite each other's report.
 
-También hace ejecutable el cierre de una feature. Para que una feature pueda
-estar en `done` tienen que existir sus dos informes —`progress/impl_<name>.md` y
-`progress/review_<name>.md`— y el del reviewer tiene que decir `APPROVED`; y
-`tests/` tiene que tener al menos un archivo de test (`require_tests_to_close`).
-Hasta ahora el ciclo decía "nadie se autoaprueba" pero **ningún código miraba
-nunca un veredicto**: bastaba con escribir `done` en el JSON. Esto no vuelve
-infalsificable el review —lo escribe un agente— pero obliga a que el artefacto
-exista y quede en git, que es lo que permite auditarlo después.
+It also makes closing a feature executable. For a feature to sit in `done`,
+both of its reports have to exist — `progress/impl_<name>.md` and
+`progress/review_<name>.md` — and the reviewer's has to say `APPROVED`; and
+`tests/` has to hold at least one test file (`require_tests_to_close`). Until
+now the cycle said "nobody approves their own work" but **no code ever looked
+at a verdict**: writing `done` in the JSON was enough. This does not make the
+review unforgeable — an agent writes it — but it forces the artefact to exist
+and to land in git, which is what makes it auditable afterwards.
 
-Y cuando todo está en orden imprime **cuál es la siguiente feature** según el
-orden de trabajo, para que ese orden deje de depender de que cada agente
-interprete bien la regla.
+And when everything is in order it prints **which feature comes next** by the
+work order, so that order stops depending on each agent reading the rule
+correctly.
 
-**Las reglas del arnés no se leen del JSON, se comprueban contra él.** `rules`
-describe cómo funciona el arnés, y ese archivo lo puede editar cualquier agente:
-leer de ahí el vocabulario de estados o el interruptor de "una feature a la vez"
-convertía la regla en una sugerencia — bastaba con ampliar `valid_status` o poner
-`one_feature_at_a_time: false` para que la feature dejara de ser vigilada. Si el
-JSON no coincide con las constantes del código, es un `[FAIL]` que lo dice.
+**The harness rules are not read from the JSON, they are checked against it.**
+`rules` describes how the harness works, and any agent can edit that file:
+reading the status vocabulary or the "one feature at a time" switch from there
+turned the rule into a suggestion — widening `valid_status` or setting
+`one_feature_at_a_time: false` was enough for the feature to stop being
+watched. If the JSON does not match the code's constants, that is a `[FAIL]`
+that says so.
 
 ```bash
 python scripts/validate_feature_list.py                  # feature_list.json
-python scripts/validate_feature_list.py otro_archivo.json
+python scripts/validate_feature_list.py other_file.json
 ```
 
-Exit codes: `0` válido · `1` inválido. Imprime una línea `[FAIL]` por problema.
+Exit codes: `0` valid · `1` invalid. It prints one `[FAIL]` line per problem.
 
-Existe como módulo aparte a propósito: `init.ps1` e `init.sh` lo invocan los dos,
-así que las reglas del alcance no se pueden desincronizar entre Windows y POSIX.
-El formato completo está descrito en `schema/feature_list.schema.json`.
+It exists as a separate module on purpose: `init.ps1` and `init.sh` both invoke
+it, so the scope rules cannot drift apart between Windows and POSIX. The full
+format is described in `schema/feature_list.schema.json`.
 
 ---
 
-## `scripts/validate_requirements.py` — no trabajar lo que nadie aprobó
+## `scripts/validate_requirements.py` — do not work on what nobody approved
 
-El otro gate del arnés. `validate_project_setup.py` exige que exista **criterio
-de calidad**; este exige que exista **alcance aprobado**.
+The harness's other gate. `validate_project_setup.py` demands that **quality
+criteria** exist; this one demands that **approved scope** exists.
 
-La razón de que sea un script y no una instrucción en un `.md`: la aprobación
-de un requisito tiene que sobrevivir a una ventana de contexto perdida. Por eso
-no vive en el chat, vive en dos archivos versionados — `estado: aprobado` en el
-frontmatter del spec y el `status` de sus features en `feature_list.json` — y
-este módulo comprueba que los dos concuerdan.
-
-```bash
-python scripts/validate_requirements.py           # el repo actual
-python scripts/validate_requirements.py ../otro
-```
-
-**La huella de lo aprobado.** Al firmar un requisito, `/approve`
-guarda en `aprobado_hash` una huella de su contenido, y el validador la
-recalcula en cada corrida. Sin eso, "aprobado" solo significaba que alguien
-escribió la palabra: editarle los criterios después no dejaba ni rastro, y el
-reviewer terminaba juzgando el código contra un texto que el humano nunca leyó.
-Quedan fuera de la huella §7 (features derivadas) y §8 (bitácora), que cambian
-legítimamente después. Para calcularla a mano:
+Why it is a script and not an instruction in a `.md`: approving a requirement
+has to survive a lost context window. So it does not live in the chat, it lives
+in two versioned files — `status: approved` in the spec's front matter and the
+`status` of its features in `feature_list.json` — and this module checks the
+two agree.
 
 ```bash
-python scripts/validate_requirements.py --huella specs/REQ-001_x.md
+python scripts/validate_requirements.py           # the current repo
+python scripts/validate_requirements.py ../other
 ```
 
-**Bloquea (`[FAIL]`)** cuando: una feature fuera de `draft` cuelga de un
-requisito sin aprobar; un spec aprobado no tiene `aprobado_hash` o su contenido
-cambió después de aprobarse; hay **código** en `src/` (recursivo, cualquier lenguaje) y
-ningún requisito aprobado; una feature no tiene `spec` o apunta a un archivo que
-no existe; un spec aprobado conserva preguntas abiertas, no tiene fecha de
-aprobación o la fecha no es `AAAA-MM-DD`, o no lo referencia ninguna feature; una
-feature tiene prioridad más alta que su requisito; el frontmatter repite claves;
-o el nombre, el `id`, el `estado` o la `prioridad` de un spec están mal.
+**The fingerprint of what was approved.** When signing a requirement,
+`/approve` stores a fingerprint of its content in `approved_hash`, and the
+validator recomputes it on every run. Without that, "approved" only meant
+somebody typed the word: editing its criteria afterwards left no trace at all,
+and the reviewer ended up judging the code against a text the human never read.
+§7 (derived features) and §8 (change log) stay out of the fingerprint, because
+they change legitimately afterwards. To compute it by hand:
 
-"Fuera de `draft`" se evalúa **por complemento**: cualquier estado que no sea
-`draft` cuenta como trabajo empezado. Con una lista blanca de estados, inventar
-uno nuevo bastaba para que la feature escapara del gate sin que ningún validador
-la mirase.
+```bash
+python scripts/validate_requirements.py --fingerprint specs/REQ-001_x.md
+```
 
-**Solo avisa (`[WARN]`)** cuando: todavía no hay requisitos; hay requisitos en
-`draft` esperando el OK del humano; una aprobación quedó a medias; de un spec
-`descartado` todavía cuelgan features en `draft`; o hay una feature
-`in_progress` de menos prioridad que algo encolado — el arnés avisa del
-adelantamiento, pero **no interrumpe trabajo a medio escribir**: eso lo decide
-el humano.
+**It blocks (`[FAIL]`)** when: a feature outside `draft` hangs off an
+unapproved requirement; an approved spec has no `approved_hash` or its content
+changed after being approved; there is **code** in `src/` (recursively, any
+language) and no approved requirement; a feature has no `spec` or points at a
+file that does not exist; an approved spec keeps open questions, has no
+approval date or a date that is not `YYYY-MM-DD`, or has no feature
+referencing it; a feature has a higher priority than its requirement; the front
+matter repeats keys; or a spec's name, `id`, `status` or `priority` is wrong.
 
-**Los archivos que empiezan por `_`** (`_plantilla_req.md`, `_entrada.md`) no
-son requisitos y se ignoran. Por eso la plantilla puede conservar sus
+"Outside `draft`" is evaluated **by complement**: any status that is not
+`draft` counts as work started. With an allowlist of statuses, inventing a new
+one was enough for the feature to escape the gate without any validator looking
+at it.
+
+**It only warns (`[WARN]`)** when: there are no requirements yet; there are
+requirements in `draft` waiting for the human's OK; an approval was left
+half-finished; features in `draft` still hang off a `discarded` spec; or a
+feature is `in_progress` with lower priority than something queued — the
+harness flags the overtake, but **it does not interrupt half-written work**:
+the human decides that.
+
+**Files starting with `_`** (`_req_template.md`, `_intake.md`) are not
+requirements and are ignored. That is why the template can keep its
 `<placeholders>`.
 
-Exit codes: `0` la trazabilidad es coherente · `1` hay trabajo sin aprobar o la
-trazabilidad está rota.
+Exit codes: `0` traceability is coherent · `1` there is unapproved work or
+traceability is broken.
 
-**Los tests del arnés** —de este validador y de sus dos hermanos— están en
-`scripts/tests/`, no en `tests/`, y **no los ejecuta el verificador**: si estuvieran en `tests/`, un proyecto recién
-instanciado saldría verde con tests que no son suyos y el arnés dejaría de
-distinguir "sin verificar" de "verificado". Los corre `/harness-check`, o tú:
+**The harness's tests** — for this validator and its siblings — live in
+`scripts/tests/`, not in `tests/`, and **the verifier does not run them**: if
+they were in `tests/`, a freshly instantiated project would come out green with
+tests that are not its own and the harness would stop telling "unverified"
+apart from "verified". `/harness-check` runs them, or you do:
 `python -m unittest discover -s scripts/tests -v`.
 
 ---
 
-## `scripts/approve.py` — firmar requisitos
+## `scripts/approve.py` — signing requirements
 
-El paso mecánico de la aprobación. El humano dice **qué** aprobar; el script se
-ocupa de las cuatro cosas que hay que tocar a la vez.
+The mechanical half of approval. The human says **what** to approve; the script
+takes care of the four things that have to be touched at once.
 
 ```bash
-python scripts/approve.py 1 2             # REQ-001 y REQ-002
-python scripts/approve.py REQ-003         # da igual cómo escribas el id
-python scripts/approve.py all             # todos los que estén en draft
-python scripts/approve.py 1 architecture  # y además firma docs/architecture.md
+python scripts/approve.py 1 2             # REQ-001 and REQ-002
+python scripts/approve.py REQ-003         # spell the id however you like
+python scripts/approve.py all             # every requirement in draft
+python scripts/approve.py 1 architecture  # and also sign docs/architecture.md
 python scripts/approve.py all --dry-run
 ```
 
-Por cada requisito nombrado: `estado: draft` → `aprobado`, la fecha de hoy en
-`aprobado_el` y `actualizado`, la huella del contenido en `aprobado_hash`, la
-fila de la bitácora (§8), y sus features de `draft` a `pending`.
+Per named requirement: `status: draft` → `approved`, today's date in
+`approved_on` and `updated`, the content fingerprint in `approved_hash`, the
+change-log row (§8), and its features from `draft` to `pending`.
 
-**Por qué es un script y no la prosa de un `.md`.** Son cuatro archivos que hay
-que dejar coherentes entre sí, y a medio camino el repositorio queda en un
-estado que el verificador marca en rojo. Ese es exactamente el tipo de trabajo
-en el que un agente se saltea un paso, y el que más fácil se saltea es justo el
-que hace verificable la aprobación: la huella.
+**Why it is a script and not a `.md`'s prose.** These are four files that have
+to be left coherent with each other, and halfway through the repository is in a
+state the verifier flags red. That is exactly the kind of work where an agent
+skips a step, and the easiest one to skip is precisely the one that makes the
+approval verifiable: the fingerprint.
 
-**Es todo o nada.** Si algo de lo que nombraste no se puede firmar —tiene
-preguntas sin responder, ya estaba aprobado, o `docs/architecture.md` conserva
-huecos— no se escribe nada. Firmar la mitad deja un estado que nadie pidió.
+**It is all or nothing.** If something you named cannot be signed — it has
+unanswered questions, it was already approved, or `docs/architecture.md` still
+has holes — nothing is written. Signing half of it leaves a state nobody asked
+for.
 
-**`architecture` se nombra aparte** a propósito: es el criterio contra el que el
-reviewer juzga *todo* el código, y aprobarlo de rebote junto a un requisito
-sería el descuido que el arnés intenta evitar.
+**`architecture` is named separately** on purpose: it is the criterion the
+reviewer judges *all* the code against, and approving it as a side effect of a
+requirement would be the oversight the harness is trying to prevent.
 
-**No está en la lista de permisos, y es a propósito.** Cuando el agente lo
-ejecuta, Claude Code te muestra el comando exacto —`python scripts/approve.py
-1 2`— y espera tu confirmación. Ese aviso es la última oportunidad de ver *qué*
-se está firmando antes de que se firme, y sale gratis.
+**It is not on the allow list, and that is deliberate.** When the agent runs
+it, Claude Code shows you the exact command — `python scripts/approve.py 1 2` —
+and waits for your confirmation. That prompt is the last chance to see *what*
+is being signed before it is signed, and it costs nothing.
 
-Exit codes: `0` firmado (o simulado) · `1` no se firmó nada, y el motivo está
-impreso.
+Exit codes: `0` signed (or simulated) · `1` nothing was signed, and the reason
+is printed.
 
 ---
 
-## Actualizar un proyecto hecho con una plantilla vieja
+## `scripts/validate_references.py` — a map that does not lie
 
-Un proyecto instanciado antes de la capa de requisitos sale en rojo apenas
-actualiza el arnés, y con razón: le falta la mitad del contrato. Qué hay que
-hacer, una vez:
+`CHECKPOINTS.md` C1 has always asked that every path mentioned in the
+documentation really exists. Until recently that was prose. A dangling
+reference is especially expensive here because the documents are the map agents
+navigate by: an agent that looks for a script because `AGENTS.md`
+mentions it, and does not find it, improvises.
 
-1. En `feature_list.json`, `rules` pasa a:
+```bash
+python scripts/validate_references.py .
+```
+
+It looks at the backtick-quoted paths in the reference documents and at the
+`spec` field of every feature. Only mentions **with a folder** count: a bare
+name — `storage.py` in a naming-conventions table — is an example, and chasing
+those filled the output with noise until nobody read it.
+
+`/harness-check` and CI run it. **Not** the verifier: a broken reference is
+documentation debt, not a reason to stop a working session.
+
+Exit codes: `0` no dangling references · `1` at least one.
+
+---
+
+## Updating a project built from an older template
+
+A project instantiated before the requirements layer comes out red as soon as
+it updates the harness, and rightly so: half the contract is missing. What to
+do, once:
+
+1. In `feature_list.json`, `rules` becomes:
    ```json
    "one_feature_at_a_time": true,
    "require_tests_to_close": true,
-   "orden_de_trabajo": "prioridad_luego_id",
+   "work_order": "priority_then_id",
    "valid_status": ["draft", "pending", "in_progress", "done", "blocked"]
    ```
-2. Cada feature necesita `spec` y `prioridad`. Si el trabajo ya está hecho y no
-   hay requisito escrito, escribí uno retroactivo con `/requirements` que cubra
-   lo que existe: es más honesto que inventar un puntero, y deja el "por qué"
-   documentado antes de que se pierda.
-3. Las features `done` necesitan sus informes en `progress/`. Si son de antes y
-   no existen, la salida menos mala es dejar constancia de eso mismo en el
-   informe: "cerrada antes de que el arnés exigiera review".
-4. `./init.ps1` o `./init.sh` te va diciendo qué falta, de a un error por causa.
+2. Every feature needs `spec` and `priority`. If the work is already done and
+   there is no written requirement, write a retroactive one with
+   `/requirements` covering what exists: it is more honest than inventing a
+   pointer, and it documents the "why" before it is lost.
+3. `done` features need their reports in `progress/`. If they predate this and
+   do not exist, the least bad way out is to record exactly that in the report:
+   "closed before the harness required a review".
+4. `./init.ps1` or `./init.sh` walks you through what is missing, one error per
+   cause.
 
 ---
 
-## `scripts/harness_hook.py` — los hooks, y por qué bloquean
+## `scripts/harness_hook.py` — the hooks, and why they block
 
-Los dos hooks de `.claude/settings.json` viven aquí:
+The hooks in `.claude/settings.json` live here:
 
 ```bash
-python scripts/harness_hook.py stop                  # antes de cerrar el turno
-python scripts/harness_hook.py post-edit             # tras cada Edit/Write
+python scripts/harness_hook.py stop                  # before closing the turn
+python scripts/harness_hook.py post-edit             # after every Edit/Write
 python scripts/harness_hook.py post-edit --tests-dir tests
+python scripts/harness_hook.py pre-tool-use          # before writing
 ```
 
-Exit codes: `0` todo en orden (o no hay nada que verificar todavía) · **`2`
-bloquea**.
+Exit codes: `0` all good (or there is nothing to verify yet) · **`2` blocks**.
 
-**El 2 es el punto entero de este archivo.** Un hook que sale con 1 no bloquea
-nada: Claude Code muestra la salida y la sesión sigue igual. Los hooks del arnés
-salían con 1, así que durante un tiempo el repositorio afirmaba que no se podían
-saltar mientras la sesión cerraba tranquilamente con el verificador en rojo. Con
-exit 2 el turno no cierra, y el motivo —que va por **stderr**, no por stdout— se
-le devuelve al modelo como algo que tiene que resolver.
+**The 2 is this file's whole point.** A hook that exits 1 blocks nothing:
+Claude Code shows the output and the session carries on. The harness hooks used
+to exit 1, so for a while the repository claimed they could not be skipped
+while the session closed happily with the verifier red. With exit 2 the turn
+does not close, and the reason — which goes to **stderr**, not stdout — is fed
+back to the model as something it has to resolve.
 
-`stop` corre el verificador entero; `post-edit` cuenta los tests y, si hay,
-los ejecuta. Cuenta antes de ejecutar porque `unittest discover` sobre una
-carpeta vacía sale con error ("NO TESTS RAN") y un proyecto recién instanciado
-vería un fallo en cada edición.
+`stop` runs the whole verifier; `post-edit` counts the tests and, if there are
+any, runs them. It counts before running because `unittest discover` over an
+empty folder exits with an error ("NO TESTS RAN") and a freshly instantiated
+project would see a failure on every edit.
 
-**El bucle.** Claude Code vuelve a llamar al hook `stop` después de que el
-agente reacciona. Si bloqueara siempre, la sesión no cerraría nunca: por eso se
-respeta `stop_hook_active`, que avisa de que ya venimos de un bloqueo. Y ojo:
-`stop` **no se dispara si interrumpes con Ctrl+C**.
+**The loop.** Claude Code calls the `stop` hook again after the agent reacts.
+If it always blocked, the session would never close: hence `stop_hook_active`,
+which says we are already coming from a block. And note: `stop` **does not fire
+if you interrupt with Ctrl+C**.
 
-### `pre-tool-use` — lo único que llega a tiempo
+### `pre-tool-use` — the only one that arrives in time
 
-`stop` y `post-edit` llegan cuando la escritura ya ocurrió. `PreToolUse` llega
-antes, y es donde el arnés protege **la capa que lo verifica**: `scripts/`,
-`.claude/`, `schema/`, `init.*`, `bootstrap.ps1`, `AGENTS.md`, `CLAUDE.md` y
-`CHECKPOINTS.md`.
+`stop` and `post-edit` arrive once the write already happened. `PreToolUse`
+arrives before, and that is where the harness protects **the layer that does
+the verifying**: `scripts/`, `.claude/`, `schema/`, `init.*`, `bootstrap.*`,
+`AGENTS.md`, `CLAUDE.md` and `CHECKPOINTS.md`.
 
-El motivo es concreto: un agente que ve rojo tiene a mano una forma trivial de
-ponerlo en verde, que es editar el validador. Pedírselo por favor en un `.md` no
-alcanza, porque es exactamente el archivo que puede reescribir.
+The reason is concrete: an agent that sees red has a trivial way to turn it
+green, which is editing the validator. Asking nicely in a `.md` is not enough,
+because that is exactly the file it can rewrite.
 
-También mira los comandos de shell, porque el matcher `Edit|Write` no ve un
-`echo x > scripts/validador.py`. Es una heurística corta —busca señales de
-escritura (`>`, `rm`, `mv`, `sed -i`, `Remove-Item`…) sobre rutas protegidas— y
-se queda deliberadamente corta: perseguir todas las formas de escribir desde
-`Bash` daría falsos positivos constantes. Sigue siendo una red, no una jaula.
+It also looks at shell commands, because the `Edit|Write` matcher does not see
+an `echo x > scripts/validator.py`. It is a short heuristic — it looks for write
+signals (`>`, `rm`, `mv`, `sed -i`, `Remove-Item`…) over protected paths — and
+deliberately stays short: chasing every way of writing from `Bash` would mean
+constant false positives. It is still a net, not a cage.
 
-**Cómo mantener el propio arnés.** La puerta existe, pero hay que abrirla a
-sabiendas: creá `.harness-mantenimiento` en la raíz (o exportá
-`HARNESS_MANTENIMIENTO=1`) y borralo al terminar. La diferencia con no tener
-protección es que el archivo aparece en `git status`: la edición deja de ser
-silenciosa y pasa a ser una decisión visible.
+**How to maintain the harness itself.** The door exists, but you have to open
+it knowingly: create `.harness-maintenance` at the root (or export
+`HARNESS_MAINTENANCE=1`) and delete it when you are done. The difference from
+having no protection is that the file shows up in `git status`: the edit stops
+being silent and becomes a visible decision.
 
-Es Python y no PowerShell para que funcione igual en Windows y en POSIX: la
-versión anterior era PowerShell puro y en WSL o Linux no corría en absoluto.
-Internamente elige `init.ps1` o `init.sh` según el sistema.
-
----
-
-## `.github/workflows/harness.yml` — el arnés verificándose
-
-Tres jobs en cada push y cada PR:
-
-- **POSIX**: los tests del arnés, `init.sh`, los validadores por separado, y
-  una comprobación de que los hooks **siguen saliendo con 2**. Si eso se
-  rompiera, los hooks volverían a ser decorativos y nadie se enteraría hasta
-  que una sesión cerrara con el verificador en rojo.
-- **Windows**: los tests e `init.ps1`, porque el `.ps1` es el canónico de la
-  plantilla y hasta ahora nadie lo corría más que a mano.
-- **Paridad**: comprueba que `init.ps1` e `init.sh` declaran exactamente las
-  mismas secciones. `docs/scripts.md` dice "si cambias uno, cambia el otro";
-  esto lo convierte en algo comprobable en vez de una buena intención.
-
-El verificador **tiene que salir con 1** en este repositorio: es la plantilla
-sin instanciar y su sección 3 lo bloquea a propósito. El CI comprueba que falle
-por esa razón y no por otra, y que las secciones que no dependen de la
-instanciación estén en verde.
+It is Python and not PowerShell so it works the same on Windows and POSIX: the
+previous version was pure PowerShell and under WSL or Linux it did not run at
+all. Internally it picks `init.ps1` or `init.sh` depending on the system.
 
 ---
 
-## `scripts/demo_orchestration.py` — el patrón, sin IA
+## `.github/workflows/harness.yml` — the harness verifying itself
 
-Demuestra la **regla anti-teléfono-descompuesto**: analiza cada módulo de `src/`,
-escribe el informe completo en `progress/explore_<modulo>.md` y devuelve por
-stdout **solo la referencia**:
+Three jobs on every push and every PR:
+
+- **POSIX**: the harness's tests, `init.sh`, the validators separately, and a
+  check that the hooks **still exit with 2**. If that broke, the hooks would go
+  back to being decorative and nobody would notice until a session closed with
+  the verifier red.
+- **Windows**: the tests and `init.ps1`, because the `.ps1` is the template's
+  canonical one and until now nobody ran it except by hand.
+- **Parity**: checks that `init.ps1` and `init.sh` declare exactly the same
+  sections. `docs/scripts.md` says "if you change one, change the other"; this
+  turns that into something checkable instead of a good intention.
+
+The verifier **has to exit 1** in this repository: it is the uninstantiated
+template and its section 3 blocks on purpose. CI checks it fails for that
+reason and not another, and that the sections that do not depend on
+instantiation are green.
+
+---
+
+## `scripts/demo_orchestration.py` — the pattern, without AI
+
+It demonstrates the **anti-broken-telephone rule**: it analyses each module in
+`src/`, writes the full report to `progress/explore_<module>.md` and returns
+**only the reference** on stdout:
 
 ```
 done -> progress/explore_storage.md
 done -> progress/explore_cli.md
 ```
 
-Eso es exactamente lo que hace un subagente real: el contenido vive en disco y
-por el canal de comunicación viaja una línea. Este script es la versión
-determinista y sin modelo del mismo patrón, útil para verlo funcionar sin gastar
-una sesión de agente.
+That is exactly what a real subagent does: the content lives on disk and a
+single line travels through the communication channel. This script is the
+deterministic, model-free version of the same pattern, useful to watch it work
+without spending an agent session.
 
 ```bash
 python scripts/demo_orchestration.py
 python scripts/demo_orchestration.py --src src --out progress --dry-run
 ```
 
-| Parámetro | Efecto |
+| Parameter | Effect |
 |-----------|--------|
-| `--src DIR` | carpeta a analizar (por defecto `src`) |
-| `--out DIR` | dónde escribir los informes (por defecto `progress`) |
-| `--dry-run` | lista las rutas sin escribir nada |
+| `--src DIR` | folder to analyse (default `src`) |
+| `--out DIR` | where to write the reports (default `progress`) |
+| `--dry-run` | lists the paths without writing anything |
 
-Exit codes: `0` terminó bien (también si no había módulos: avisa y sale 0) ·
-`1` la carpeta de `--src` no existe.
+Exit codes: `0` finished fine (also when there were no modules: it warns and
+exits 0) · `1` the `--src` folder does not exist.
 
-No forma parte de la verificación: ni `init.*` ni ningún hook lo llaman. Con
-`src/` vacía no escribe nada — es el estado normal de la plantilla recién
-instanciada.
+It is not part of verification: neither `init.*` nor any hook calls it. With an
+empty `src/` it writes nothing — which is the normal state of a freshly
+instantiated template.

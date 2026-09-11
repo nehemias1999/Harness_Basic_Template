@@ -1,36 +1,36 @@
-"""Demo ejecutable del patrón Líder-Trabajador con escritura en disco.
+"""Runnable demo of the Leader-Worker pattern with results written to disk.
 
-Propósito
-    Ilustrar la regla anti-teléfono-descompuesto del arnés: cada "trabajador"
-    analiza un módulo de `src/`, escribe su informe completo en
-    `progress/explore_<modulo>.md` y devuelve **solo la ruta**. Por el canal de
-    comunicación (aquí stdout, en una sesión real el chat) no circula el
-    contenido, solo referencias ligeras.
+Purpose
+    Illustrate the harness's anti-broken-telephone rule: each "worker" analyses
+    a module under `src/`, writes its full report to
+    `progress/explore_<module>.md` and returns **only the path**. Nothing but
+    lightweight references travels through the communication channel (stdout
+    here, the chat in a real session).
 
-    Es la versión determinista y sin IA del patrón que ejecutan los subagentes
-    reales definidos en `.claude/agents/`.
+    It is the deterministic, AI-free version of the pattern the real subagents
+    in `.claude/agents/` follow.
 
-Quién lo ejecuta
-    Un humano que quiere entender o demostrar el patrón, o un agente al que se
-    le pide un mapa rápido de `src/`. No forma parte de la verificación: no lo
-    llama `init.ps1` / `init.sh` ni ningún hook.
+Who runs it
+    A human who wants to understand or demonstrate the pattern, or an agent
+    asked for a quick map of `src/`. It is not part of verification: neither
+    `init.ps1` / `init.sh` nor any hook calls it.
 
-Parámetros
-    --src DIR       Carpeta a analizar (por defecto: src)
-    --out DIR       Dónde escribir los informes (por defecto: progress)
-    --dry-run       No escribe nada; solo lista lo que escribiría
+Parameters
+    --src DIR       Folder to analyse (default: src)
+    --out DIR       Where to write the reports (default: progress)
+    --dry-run       Writes nothing; only lists what it would write
 
-Uso
+Usage
     python scripts/demo_orchestration.py
     python scripts/demo_orchestration.py --src src --out progress --dry-run
 
-Salida
-    Una línea por módulo con la referencia al informe, del mismo formato que
-    devuelve un subagente:  done -> progress/explore_<modulo>.md
+Output
+    One line per module with the reference to its report, in the same format a
+    subagent returns:  done -> progress/explore_<module>.md
 
 Exit codes
-    0  terminó bien (incluso si no había módulos que analizar)
-    1  la carpeta indicada en --src no existe
+    0  finished fine (even if there were no modules to analyse)
+    1  the folder given in --src does not exist
 """
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ from datetime import datetime
 
 
 def analyze(path: str) -> dict[str, object]:
-    """Extrae métricas estructurales de un módulo Python sin importarlo."""
+    """Extracts structural metrics from a Python module without importing it."""
     with open(path, encoding="utf-8") as handle:
         source = handle.read()
 
@@ -79,38 +79,38 @@ def analyze(path: str) -> dict[str, object]:
 
 
 def render(module: str, path: str, data: dict[str, object]) -> str:
-    """Compone el informe en el formato estándar de `progress/explore_*.md`."""
+    """Builds the report in the standard `progress/explore_*.md` format."""
     def bullets(items: list[str]) -> str:
-        return "\n".join(f"- `{item}`" for item in items) if items else "_ninguna_"
+        return "\n".join(f"- `{item}`" for item in items) if items else "_none_"
 
-    return f"""# Exploración — {module}
+    return f"""# Exploration — {module}
 
-- **Archivo:** `{path}`
-- **Generado:** {datetime.now().isoformat(timespec="seconds")}
-- **Por:** `scripts/demo_orchestration.py`
+- **File:** `{path}`
+- **Generated:** {datetime.now().isoformat(timespec="seconds")}
+- **By:** `scripts/demo_orchestration.py`
 
-## Propósito declarado
+## Stated purpose
 
-{data["docstring"].strip() or "_el módulo no tiene docstring_"}
+{data["docstring"].strip() or "_the module has no docstring_"}
 
-## Métricas
+## Metrics
 
-| Métrica            | Valor |
-|--------------------|-------|
-| Líneas totales     | {data["lines"]} |
-| Líneas de código   | {data["code_lines"]} |
-| Funciones          | {len(data["functions"])} |
-| Clases             | {len(data["classes"])} |
+| Metric        | Value |
+|---------------|-------|
+| Total lines   | {data["lines"]} |
+| Code lines    | {data["code_lines"]} |
+| Functions     | {len(data["functions"])} |
+| Classes       | {len(data["classes"])} |
 
-## Funciones
+## Functions
 
 {bullets(data["functions"])}
 
-## Clases
+## Classes
 
 {bullets(data["classes"])}
 
-## Dependencias
+## Dependencies
 
 {bullets(data["imports"])}
 """
@@ -118,15 +118,15 @@ def render(module: str, path: str, data: dict[str, object]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Escribe un informe por módulo de src/ y devuelve solo las rutas.",
+        description="Writes one report per module in src/ and returns only the paths.",
     )
-    parser.add_argument("--src", default="src", help="carpeta a analizar")
-    parser.add_argument("--out", default="progress", help="carpeta donde escribir los informes")
-    parser.add_argument("--dry-run", action="store_true", help="no escribe, solo lista")
+    parser.add_argument("--src", default="src", help="folder to analyse")
+    parser.add_argument("--out", default="progress", help="folder to write the reports into")
+    parser.add_argument("--dry-run", action="store_true", help="writes nothing, only lists")
     args = parser.parse_args(argv)
 
     if not os.path.isdir(args.src):
-        print(f"[FAIL]  No existe la carpeta {args.src}", file=sys.stderr)
+        print(f"[FAIL]  The folder {args.src} does not exist", file=sys.stderr)
         return 1
 
     modules = sorted(
@@ -135,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if not modules:
-        print(f"[WARN]  No hay módulos que analizar en {args.src}/", file=sys.stderr)
+        print(f"[WARN]  There are no modules to analyse in {args.src}/", file=sys.stderr)
         return 0
 
     if not args.dry_run:
@@ -151,7 +151,8 @@ def main(argv: list[str] | None = None) -> int:
             with open(report_path, "w", encoding="utf-8") as handle:
                 handle.write(report)
 
-        # Esto es lo único que sale por el canal: la referencia, nunca el contenido.
+        # This is the only thing that goes through the channel: the reference,
+        # never the content.
         print(f"done -> {report_path}")
 
     return 0

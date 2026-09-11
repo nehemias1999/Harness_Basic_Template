@@ -1,34 +1,35 @@
-# Verificación — Cómo demostrar que el trabajo funciona
+# Verification — How to prove the work actually works
 
-> Regla de oro: **el agente no dice "funciona", lo demuestra**.
-> Toda feature termina con evidencia ejecutable, no con afirmaciones.
+> Golden rule: **the agent does not say "it works", it proves it**.
+> Every feature ends with runnable evidence, not with assertions.
 
-## Niveles de verificación
+## Levels of verification
 
-### Nivel 0 — El requisito estaba aprobado (obligatorio)
+### Level 0 — The requirement was approved (mandatory)
 
-Antes de demostrar que algo funciona hay que poder demostrar que **había que
-hacerlo**. La prueba no es una frase en el chat: es `estado: aprobado` en el
-spec de `specs/` y la feature en `pending` o más allá. Lo comprueba la sección
-5 del verificador (`scripts/validate_requirements.py`), y sin eso nada de lo
-que sigue cuenta: código que pasa todos los tests de algo que nadie pidió
-sigue siendo trabajo perdido.
+Before proving that something works you have to be able to prove that it
+**had to be built**. The proof is not a sentence in the chat: it is
+`status: approved` in the spec under `specs/` and the feature in `pending` or
+beyond. Section 5 of the verifier checks it
+(`scripts/validate_requirements.py`), and without that nothing below counts:
+code that passes every test for something nobody asked for is still wasted
+work.
 
-### Nivel 1 — Tests unitarios (obligatorio)
+### Level 1 — Unit tests (mandatory)
 
-Toda función pública en `src/` tiene al menos un test en `tests/` que:
+Every public function in `src/` has at least one test in `tests/` that:
 
-1. Cubre el camino feliz.
-2. Cubre al menos un camino de error si la función puede fallar.
+1. Covers the happy path.
+2. Covers at least one error path if the function can fail.
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-### Nivel 2 — Test de integración de la interfaz (obligatorio para features de UI/CLI)
+### Level 2 — Interface integration test (mandatory for UI/CLI features)
 
-Las features que añaden comandos o endpoints se verifican ejecutando el código
-real contra un directorio temporal, no contra el estado del desarrollador:
+Features that add commands or endpoints are verified by running the real code
+against a temporary directory, not against the developer's own state:
 
 ```python
 import os
@@ -37,57 +38,58 @@ import sys
 import tempfile
 
 with tempfile.TemporaryDirectory() as tmp:
-    env = {**os.environ, "<VAR_DE_ESTADO>": os.path.join(tmp, "state.json")}
+    env = {**os.environ, "<STATE_VAR>": os.path.join(tmp, "state.json")}
     out = subprocess.check_output(
-        [sys.executable, "-m", "src.<modulo>", "<comando>", "<arg>"],
+        [sys.executable, "-m", "src.<module>", "<command>", "<arg>"],
         env=env, text=True,
     )
-    assert "<fragmento esperado>" in out
+    assert "<expected fragment>" in out
 ```
 
-`sys.executable` en lugar del literal `python3`: así el test usa el mismo
-intérprete en Windows y en Linux.
+`sys.executable` rather than a literal `python3`: that way the test uses the
+same interpreter on Windows and on Linux.
 
-### Nivel 3 — Smoke test manual (opcional pero recomendado)
+### Level 3 — Manual smoke test (optional but recommended)
 
-Antes de cerrar la sesión, ejecuta un flujo end-to-end contra un archivo
-temporal y bórralo después.
+Before closing the session, run an end-to-end flow against a temporary file
+and delete it afterwards.
 
 ```powershell
 # Windows / PowerShell
-$env:<VAR_DE_ESTADO> = "$env:TEMP\smoke_state.json"
-python -m src.<modulo> <comando> <arg>
-Remove-Item $env:<VAR_DE_ESTADO>
+$env:<STATE_VAR> = "$env:TEMP\smoke_state.json"
+python -m src.<module> <command> <arg>
+Remove-Item $env:<STATE_VAR>
 ```
 
 ```bash
 # POSIX
-<VAR_DE_ESTADO>="${TMPDIR:-/tmp}/smoke_state.json" python -m src.<modulo> <comando> <arg>
+<STATE_VAR>="${TMPDIR:-/tmp}/smoke_state.json" python -m src.<module> <command> <arg>
 rm "${TMPDIR:-/tmp}/smoke_state.json"
 ```
 
-## Anti-patrones (no hacer)
+## Antipatterns (do not do this)
 
-- ❌ "He añadido el comando, debería funcionar." → falta test ejecutable.
-- ❌ Test que solo verifica que la función no lanza excepción. → tiene que
-  comprobar el resultado concreto.
-- ❌ `mock` del filesystem. → usa `tempfile.TemporaryDirectory()` real.
-- ❌ Rutas absolutas o del usuario en los tests. → siempre temporales.
-- ❌ Marcar la feature como `done` sin pasar el verificador.
+- ❌ "I added the command, it should work." → a runnable test is missing.
+- ❌ A test that only checks the function does not raise. → it has to check the
+  concrete result.
+- ❌ Mocking the filesystem. → use a real `tempfile.TemporaryDirectory()`.
+- ❌ Absolute or user-specific paths in tests. → always temporary ones.
+- ❌ Marking the feature `done` without a passing verifier.
 
-## Verificación final antes de cerrar
+## Final check before closing
 
 ```powershell
-./init.ps1          # Windows — debe terminar con [OK] Entorno listo
+./init.ps1          # Windows — must end with [OK] Environment ready
 ```
 
 ```bash
-./init.sh           # POSIX / WSL / CI — mismo resultado
+./init.sh           # POSIX / WSL / CI — same result
 ```
 
-Si el verificador está rojo, **no** marques nada como `done`. Anota el bloqueo
-en `progress/current.md` y deja la feature en `blocked` en `feature_list.json`.
+If the verifier is red, do **not** mark anything as `done`. Record the blocker
+in `progress/current.md` and leave the feature `blocked` in
+`feature_list.json`.
 
-Ojo con un caso que el verificador distingue a propósito: **0 tests sale `[WARN]`,
-no `[OK]`**. Un repo sin tests no está verde, está sin verificar. Ver
-`docs/scripts.md`.
+Watch out for one case the verifier distinguishes on purpose: **0 tests is a
+`[WARN]`, not an `[OK]`**. A repo with no tests is not green, it is
+unverified. See `docs/scripts.md`.

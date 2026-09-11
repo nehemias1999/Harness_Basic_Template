@@ -1,13 +1,13 @@
-# El arnés, verificándose a sí mismo.
+# The harness, verifying itself.
 #
-# Existe por una razón que el propio repositorio predica: un control que
-# depende de que alguien se acuerde de ejecutarlo no es un control. Hasta este
-# workflow, los tests del arnés no los corría nada automáticamente y la
-# paridad entre init.ps1 e init.sh dependía de que alguien la mirara a mano.
+# It exists for a reason the repository itself preaches: a control that depends
+# on somebody remembering to run it is not a control. Until this workflow, the
+# harness's own tests were not run by anything automatically and the parity
+# between init.ps1 and init.sh depended on someone eyeballing it.
 #
-# Los dos verificadores son el mismo en dos dialectos, así que corren los dos:
-# si divergen, es acá donde se ve.
-name: arnés
+# The two verifiers are the same one in two dialects, so both run: if they
+# diverge, this is where it shows.
+name: harness
 
 on:
   push:
@@ -28,65 +28,65 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Tests del arnés
+      - name: Harness tests
         run: python -m unittest discover -s scripts/tests -v
 
-      - name: Verificador
-        # La plantilla sin instanciar sale en rojo A PROPÓSITO: su sección 3
-        # exige configurar el proyecto primero. Lo que se comprueba acá es que
-        # falle por esa razón y no por otra, y que las secciones que no
-        # dependen de la instanciación estén en verde.
+      - name: Verifier
+        # The uninstantiated template comes out red ON PURPOSE: its section 3
+        # demands configuring the project first. What is checked here is that
+        # it fails for that reason and not another, and that the sections that
+        # do not depend on instantiation are green.
         run: |
           set +e
-          salida=$(./init.sh --quiet 2>&1)
-          codigo=$?
+          output=$(./init.sh --quiet 2>&1)
+          code=$?
           set -e
-          echo "$salida"
-          echo "exit code: $codigo"
+          echo "$output"
+          echo "exit code: $code"
 
-          if [ "$codigo" -ne 1 ]; then
-            echo "::error::se esperaba exit 1 (plantilla sin instanciar), llegó $codigo"
+          if [ "$code" -ne 1 ]; then
+            echo "::error::expected exit 1 (uninstantiated template), got $code"
             exit 1
           fi
-          echo "$salida" | grep -q "SIN INSTANCIAR" || {
-            echo "::error::el verificador falla, pero no por estar sin instanciar"
+          echo "$output" | grep -q "NOT INSTANTIATED" || {
+            echo "::error::the verifier fails, but not because it is uninstantiated"
             exit 1
           }
-          for seccion in "feature_list.json válido" "requisitos ("; do
-            echo "$salida" | grep -q "$seccion" || {
-              echo "::error::falta la línea [OK] de: $seccion"
+          for section in "feature_list.json valid" "requirements ("; do
+            echo "$output" | grep -q "$section" || {
+              echo "::error::missing the [OK] line for: $section"
               exit 1
             }
           done
 
-      - name: Los validadores, por separado
+      - name: The validators, separately
         run: |
           python scripts/validate_feature_list.py feature_list.json
           python scripts/validate_requirements.py .
 
-      - name: Sin referencias colgantes
-        # CHECKPOINTS.md C1 lo pide desde siempre; hasta ahora no lo
-        # comprobaba nadie. No lo corre el verificador a propósito: una
-        # referencia rota es deuda de documentación, no motivo para frenar
-        # una sesión de trabajo.
-        run: python scripts/validate_referencias.py .
+      - name: No dangling references
+        # CHECKPOINTS.md C1 has always asked for this; until recently nobody
+        # checked it. The verifier does not run it on purpose: a broken
+        # reference is documentation debt, not a reason to stop a working
+        # session.
+        run: python scripts/validate_references.py .
 
-      - name: Los hooks bloquean
-        # Si esto deja de salir 2, los hooks vuelven a ser decorativos y nadie
-        # se entera hasta que una sesión cierre con el verificador en rojo.
+      - name: The hooks block
+        # If this stops exiting 2, the hooks go back to being decorative and
+        # nobody notices until a session closes with the verifier red.
         run: |
           set +e
           echo '{}' | python scripts/harness_hook.py stop
-          codigo=$?
+          code=$?
           set -e
-          [ "$codigo" -eq 2 ] || { echo "::error::el hook stop debería bloquear con 2, salió $codigo"; exit 1; }
+          [ "$code" -eq 2 ] || { echo "::error::the stop hook should block with 2, it exited $code"; exit 1; }
 
           set +e
           echo '{"tool_name":"Write","tool_input":{"file_path":"scripts/validate_requirements.py"}}' \
             | python scripts/harness_hook.py pre-tool-use
-          codigo=$?
+          code=$?
           set -e
-          [ "$codigo" -eq 2 ] || { echo "::error::pre-tool-use debería bloquear con 2, salió $codigo"; exit 1; }
+          [ "$code" -eq 2 ] || { echo "::error::pre-tool-use should block with 2, it exited $code"; exit 1; }
 
   windows:
     name: Windows (init.ps1)
@@ -98,56 +98,56 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Tests del arnés
+      - name: Harness tests
         run: python -m unittest discover -s scripts/tests -v
 
-      - name: Verificador
+      - name: Verifier
         shell: pwsh
         run: |
-          $salida = & ./init.ps1 -Quiet 6>&1 | Out-String
-          $codigo = $LASTEXITCODE
-          Write-Host $salida
-          Write-Host "exit code: $codigo"
+          $output = & ./init.ps1 -Quiet 6>&1 | Out-String
+          $code = $LASTEXITCODE
+          Write-Host $output
+          Write-Host "exit code: $code"
 
-          if ($codigo -ne 1) {
-            Write-Host "::error::se esperaba exit 1 (plantilla sin instanciar), llegó $codigo"
+          if ($code -ne 1) {
+            Write-Host "::error::expected exit 1 (uninstantiated template), got $code"
             exit 1
           }
-          if ($salida -notmatch "SIN INSTANCIAR") {
-            Write-Host "::error::el verificador falla, pero no por estar sin instanciar"
+          if ($output -notmatch "NOT INSTANTIATED") {
+            Write-Host "::error::the verifier fails, but not because it is uninstantiated"
             exit 1
           }
 
-          # El paso hereda el $LASTEXITCODE del verificador, que sale con 1 a
-          # propósito. Sin esto, el job falla aunque las comprobaciones pasen.
+          # The step inherits the verifier's $LASTEXITCODE, which is 1 on
+          # purpose. Without this, the job fails even when the checks pass.
           exit 0
 
-  paridad:
-    name: Paridad de las secciones
+  parity:
+    name: Section parity
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Las cabeceras de init.ps1 e init.sh coinciden
-        # docs/scripts.md dice "si cambias uno, cambia el otro". Esto lo
-        # convierte en algo comprobable en vez de una buena intención.
+      - name: init.ps1 and init.sh headers match
+        # docs/scripts.md says "if you change one, change the other". This
+        # turns that into something checkable instead of a good intention.
         run: |
           python - <<'PY'
           import re, sys
 
-          def secciones(path, patron):
+          def sections(path, pattern):
               with open(path, encoding="utf-8") as handle:
-                  return [m.group(1).strip() for m in re.finditer(patron, handle.read())]
+                  return [m.group(1).strip() for m in re.finditer(pattern, handle.read())]
 
-          ps1 = secciones("init.ps1", r'Write-Host "-- (\d+\. [^-]+?) -+"')
-          sh = secciones("init.sh", r'echo "── (\d+\. [^─]+?) ─+"')
+          ps1 = sections("init.ps1", r'Write-Host "-- (\d+\. [^-]+?) -+"')
+          sh = sections("init.sh", r'echo "── (\d+\. [^─]+?) ─+"')
 
           if ps1 != sh:
-              print("::error::init.ps1 e init.sh no tienen las mismas secciones")
+              print("::error::init.ps1 and init.sh do not declare the same sections")
               print(f"  init.ps1: {ps1}")
               print(f"  init.sh : {sh}")
               sys.exit(1)
-          print(f"{len(ps1)} secciones, idénticas en las dos plataformas:")
-          for nombre in ps1:
-              print(f"  {nombre}")
+          print(f"{len(ps1)} sections, identical on both platforms:")
+          for name in ps1:
+              print(f"  {name}")
           PY

@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# bootstrap.sh — Instancia un proyecto nuevo (POSIX / WSL / macOS / Linux)
+# bootstrap.sh — Instantiates a new project (POSIX / WSL / macOS / Linux)
 #
-# Propósito  : rellenar los placeholders de la plantilla y dejar el repositorio
-#              en estado "proyecto recién empezado".
-# Lo ejecuta : un humano, UNA vez, justo después de copiar o clonar la plantilla.
-#              No está en la lista de permisos del agente: instanciar un
-#              proyecto vacía el alcance y borra los requisitos, y esa decisión
-#              es tuya.
-# Equivalente: ./bootstrap.ps1 (canónico en Windows).
+# Purpose    : fill in the template's placeholders and leave the repository in
+#              a "project just started" state.
+# Who runs it: a human, ONCE, right after copying or cloning the template.
+#              It is not on the agent's allow list: instantiating a project
+#              empties the scope and deletes the requirements, and that
+#              decision is yours.
+# Equivalent : ./bootstrap.ps1 (canonical on Windows).
 #
-# Los dos son wrappers de scripts/instanciar.py, que es donde vive la lógica.
-# Duplicarla en PowerShell y en bash garantizaba que un día dijeran cosas
-# distintas — el mismo motivo por el que los validadores son módulos Python.
+# Both are wrappers around scripts/instantiate.py, which is where the logic
+# lives. Duplicating it in PowerShell and bash guaranteed they would say
+# different things one day — the same reason the validators are Python modules.
 #
-# Uso        : ./bootstrap.sh --name "mi-proyecto" [--description "Qué hace."]
+# Usage      : ./bootstrap.sh --name "my-project" [--description "What it does."]
 #                             [--force] [--reset-git] [--no-git] [--dry-run]
-# Exit codes : 0 instanciado · 1 falta algo, o ya era un proyecto instanciado.
+# Exit codes : 0 instantiated · 1 something missing, or already a project.
 
 set -u
 
@@ -32,8 +32,8 @@ for candidate in python3 python py; do
 done
 
 if [ -z "$PY" ]; then
-  printf "[FAIL]  No se encontró un Python ejecutable: el arnés lo necesita (ver docs/scripts.md)\n" >&2
+  printf "[FAIL]  No runnable Python found: the harness needs it (see docs/scripts.md)\n" >&2
   exit 1
 fi
 
-exec "$PY" scripts/instanciar.py "$@"
+exec "$PY" scripts/instantiate.py "$@"

@@ -1,257 +1,260 @@
-# <TU_PROYECTO>
+# <YOUR_PROJECT>
 
-> <DESCRIPCION_PROYECTO>
+> <PROJECT_DESCRIPTION>
 
-Este repositorio trabaja con un **arnés** (harness): un conjunto de archivos,
-scripts y roles que permiten a un agente de IA trabajar de forma autónoma y
-**verificable**. Lo importante no es qué hace la app, sino cómo está estructurado
-el repo para que un agente pueda avanzar sin supervisión constante y sin
-inventarse que algo funciona.
+This repository works with a **harness**: a set of files, scripts and roles
+that let an AI agent work autonomously and **verifiably**. What matters is not
+what the app does, but how the repo is structured so an agent can make progress
+without constant supervision and without making up that something works.
 
-Si acabas de copiar esta plantilla, ve a [Arranque rápido](#arranque-rápido).
+If you have just copied this template, go to [Quick start](#quick-start).
 
-## Los tres pilares
+## The three pillars
 
-| Pilar | Manifestación en este repo |
-|-------|----------------------------|
-| **1. El repositorio ES el sistema** | `AGENTS.md`, `init.ps1` / `init.sh`, `specs/`, `feature_list.json`, `progress/`, `docs/` |
-| **2. Orquestación multi-agente** | `.claude/agents/analyst.md`, `leader.md`, `implementer.md`, `reviewer.md`, `.claude/commands/` |
-| **3. Supervisión y mejora** | `CHECKPOINTS.md`, hooks en `.claude/settings.json`, `tests/` |
+| Pillar | How it shows up in this repo |
+|--------|------------------------------|
+| **1. The repository IS the system** | `AGENTS.md`, `init.ps1` / `init.sh`, `specs/`, `feature_list.json`, `progress/`, `docs/` |
+| **2. Multi-agent orchestration** | `.claude/agents/analyst.md`, `leader.md`, `implementer.md`, `reviewer.md`, `.claude/commands/` |
+| **3. Supervision and improvement** | `CHECKPOINTS.md`, hooks in `.claude/settings.json`, `tests/` |
 
-## Arranque rápido
+## Quick start
 
 ```powershell
-./bootstrap.ps1 -Name "mi-proyecto" -Description "Qué hace." -WhatIf   # ensayo
-./bootstrap.ps1 -Name "mi-proyecto" -Description "Qué hace."           # de verdad
+./bootstrap.ps1 -Name "my-project" -Description "What it does." -WhatIf   # dry run
+./bootstrap.ps1 -Name "my-project" -Description "What it does."           # for real
 ```
 
 ```bash
-./bootstrap.sh --name "mi-proyecto" --description "Qué hace." --dry-run  # ensayo
-./bootstrap.sh --name "mi-proyecto" --description "Qué hace."            # de verdad
+./bootstrap.sh --name "my-project" --description "What it does." --dry-run  # dry run
+./bootstrap.sh --name "my-project" --description "What it does."            # for real
 ```
 
-Los dos hacen exactamente lo mismo: son wrappers de `scripts/instanciar.py`,
-que es donde vive la lógica.
+Both do exactly the same thing: they are wrappers around
+`scripts/instantiate.py`, which is where the logic lives.
 
-Si **clonaste** esta plantilla en vez de copiarla, añade `-ResetGit` para no
-arrastrar su historial. En cualquiera de los dos casos el script deja el
-repositorio git del proyecto listo y, si hacía falta, desconecta el `origin`
-heredado — sin eso tu primer `git push` iría al repo de la plantilla.
+If you **cloned** this template instead of copying it, add `-ResetGit` so you
+do not drag its history along. Either way the script leaves the project's git
+repository ready and, if needed, disconnects the inherited `origin` — without
+that, your first `git push` would go to the template's repo.
 
-Después, en este orden:
+Then, in this order:
 
-1. **Abre Claude Code en la raíz y pásale tus requisitos en lenguaje normal**
-   (o usa `/requirements`). No hace falta que estén ordenados ni completos: para
-   eso está el ciclo. El agente `analyst` los deja como specs en `specs/`, uno
-   por requisito, con criterios de aceptación verificables y una prioridad — y
-   te **pregunta** lo que no sabe en vez de asumirlo. En la primera ronda
-   redacta además un borrador de `docs/architecture.md`.
-2. **Léelos e itera.** Agrega, modifica o saca lo que quieras: cada vuelta es
-   una ronda y queda registrada en la bitácora de cada spec. Nada se
-   implementa mientras tanto.
-3. **Cuando estés conforme, los aprobás por id**: `/approve 1 2`, o
-   `/approve-all` para firmar todo lo que esté en borrador. Los specs quedan
-   firmados y sus features pasan a `pending`. La arquitectura se nombra aparte:
+1. **Open Claude Code at the root and hand it your requirements in plain
+   language** (or use `/requirements`). They do not need to be tidy or
+   complete: that is what the cycle is for. The `analyst` agent turns them into
+   specs under `specs/`, one per requirement, with verifiable acceptance
+   criteria and a priority — and it **asks** about what it does not know
+   instead of assuming. On the first round it also drafts
+   `docs/architecture.md`.
+2. **Read them and iterate.** Add, change or drop whatever you want: each pass
+   is a round and is recorded in every spec's change log. Nothing gets
+   implemented in the meantime.
+3. **When you are happy, you approve them by id**: `/approve 1 2`, or
+   `/approve-all` to sign everything still in draft. The specs get signed and
+   their features move to `pending`. The architecture is named separately:
    `/approve 1 architecture`.
 
-   Ese es el único momento en que el arnés considera que hay trabajo que hacer:
-   un "dale" en el chat no aprueba nada. La aprobación es el comando con los
-   ids escritos, y queda en git.
-4. **Revisa `docs/conventions.md` y `docs/verification.md`.** Vienen con las
-   convenciones Python del template; ajústalas a tu gusto.
-5. **Ejecuta el verificador** — debe quedar verde.
+   That is the only moment the harness considers there is work to do: a "sure,
+   go ahead" in the chat approves nothing. The approval is the command with the
+   ids written out, and it lands in git.
+4. **Review `docs/conventions.md` and `docs/verification.md`.** They ship with
+   the template's Python conventions; adjust them to taste.
+5. **Run the verifier** — it should come out green.
    ```powershell
    ./init.ps1        # Windows
    ```
    ```bash
    ./init.sh         # WSL / macOS / Linux / CI
    ```
-6. **`/next-feature`** para arrancar el desarrollo. Empieza por la feature de
-   mayor prioridad, no por la de menor `id`.
+6. **`/next-feature`** to start development. It starts with the
+   highest-priority feature, not the lowest `id`.
 
-Hasta el paso 3 el verificador sale en **rojo a propósito**: el arnés no te
-deja programar sobre un proyecto sin requisitos aprobados, porque entonces el
-reviewer no tendría contra qué juzgar el código.
+Until step 3 the verifier comes out **red on purpose**: the harness will not
+let you program on a project with no approved requirements, because then the
+reviewer would have nothing to judge the code against.
 
-Si prefieres escribir los requisitos a mano, puedes: copia
-`specs/_plantilla_req.md`, rellena `docs/architecture.md` y añade las features
-a `feature_list.json` tú mismo. El arnés valida lo mismo en los dos casos.
+If you prefer to write the requirements by hand, you can: copy
+`specs/_req_template.md`, fill in `docs/architecture.md` and add the features
+to `feature_list.json` yourself. The harness validates the same either way.
 
 ## Scripts
 
-| Script | Quién lo ejecuta | Cuándo |
-|--------|------------------|--------|
-| `init.ps1` / `init.sh` | agente, hook `Stop`, reviewer | al arrancar la sesión y antes de todo `done` |
-| `bootstrap.ps1` / `bootstrap.sh` | humano | una vez, al instanciar el proyecto |
-| `scripts/validate_project_setup.py` | `init.*` (y a mano) | bloquea el arranque si el proyecto no está configurado |
-| `scripts/validate_requirements.py` | `init.*` (y a mano) | bloquea si se trabaja sobre un requisito sin aprobar |
-| `scripts/approve.py` | `/approve`, `/approve-all` | cuando firmas requisitos |
-| `scripts/validate_feature_list.py` | `init.*` (y a mano) | para comprobar el alcance |
-| `scripts/harness_hook.py` | hooks `PostToolUse` y `Stop` | automático; bloquean con exit 2 |
-| `scripts/demo_orchestration.py` | humano o agente | para ver el patrón anti-teléfono-descompuesto en acción |
+| Script | Who runs it | When |
+|--------|-------------|------|
+| `init.ps1` / `init.sh` | agent, `Stop` hook, reviewer | when starting the session and before any `done` |
+| `bootstrap.ps1` / `bootstrap.sh` | human | once, when instantiating the project |
+| `scripts/validate_project_setup.py` | `init.*` (and by hand) | blocks start-up if the project is not configured |
+| `scripts/validate_requirements.py` | `init.*` (and by hand) | blocks work on an unapproved requirement |
+| `scripts/approve.py` | `/approve`, `/approve-all` | when you sign requirements |
+| `scripts/validate_feature_list.py` | `init.*` (and by hand) | to check the scope |
+| `scripts/harness_hook.py` | `PostToolUse` and `Stop` hooks | automatic; they block with exit 2 |
+| `scripts/demo_orchestration.py` | human or agent | to see the anti-broken-telephone pattern in action |
 
-Parámetros, exit codes y qué hacer cuando cada uno falla: **`docs/scripts.md`**.
+Parameters, exit codes and what to do when each one fails: **`docs/scripts.md`**.
 
-## Windows y POSIX
+## Windows and POSIX
 
-`init.ps1` e `init.sh` son **el mismo verificador**: misma estructura de siete
-secciones, misma salida `[OK]/[WARN]/[FAIL]`, mismo exit code. Usa el `.ps1` en
-Windows y el `.sh` en WSL, macOS, Linux o CI. Si tocas uno, toca el otro — y el
-CI comprueba que declaren las mismas secciones, para que "si tocas uno" no
-dependa de que alguien se acuerde.
+`init.ps1` and `init.sh` are **the same verifier**: same seven-section
+structure, same `[OK]/[WARN]/[FAIL]` output, same exit code. Use the `.ps1` on
+Windows and the `.sh` on WSL, macOS, Linux or CI. If you touch one, touch the
+other — and CI checks they declare the same sections, so "if you touch one"
+does not depend on anyone remembering.
 
-Lo mismo con `bootstrap.ps1` y `bootstrap.sh`, salvo que ahí no hay dos
-implementaciones: los dos llaman a `scripts/instanciar.py`.
+Same for `bootstrap.ps1` and `bootstrap.sh`, except there are no two
+implementations there: both call `scripts/instantiate.py`.
 
-Los hooks de `.claude/settings.json` ya no dependen de la plataforma: son
-`python scripts/harness_hook.py`, y el script elige `init.ps1` o `init.sh`
-según el sistema. Lo único que puede hacer falta cambiar en Linux es el nombre
-del intérprete (`python` → `python3`) si tu distribución no expone `python`.
+The hooks in `.claude/settings.json` no longer depend on the platform: they are
+`python scripts/harness_hook.py`, and the script picks `init.ps1` or `init.sh`
+depending on the system. The only thing you may need to change on Linux is the
+interpreter name (`python` → `python3`) if your distribution does not expose
+`python`.
 
-Esos hooks **bloquean**: salen con exit 2, así que el turno no cierra con el
-verificador en rojo ni con los tests rotos. Y un tercero, `PreToolUse`, llega
-antes de la escritura y protege la capa que verifica el trabajo (`scripts/`,
-`.claude/`, `init.*`, `AGENTS.md`, `CLAUDE.md`, `CHECKPOINTS.md`): un agente
-que ve rojo no arregla el rojo editando el validador.
+Those hooks **block**: they exit with 2, so the turn does not close with a red
+verifier or with broken tests. And a third one, `PreToolUse`, arrives before
+the write and protects the layer that verifies the work (`scripts/`,
+`.claude/`, `init.*`, `AGENTS.md`, `CLAUDE.md`, `CHECKPOINTS.md`): an agent
+that sees red does not fix the red by editing the validator.
 
-Para mantener el propio arnés hay que declararlo: creá `.harness-mantenimiento`
-en la raíz y borralo al terminar. El archivo aparece en `git status`, así que
-la edición deja de ser silenciosa y pasa a ser una decisión visible.
+To maintain the harness itself you have to declare it: create
+`.harness-maintenance` at the root and delete it when you are done. The file
+shows up in `git status`, so the edit stops being silent and becomes a visible
+decision.
 
-## El ciclo de trabajo
+## The work cycle
 
-`CLAUDE.md` fuerza a Claude a actuar como **leader**: orquesta, no escribe código.
+`CLAUDE.md` forces Claude to act as the **leader**: it orchestrates, it does
+not write code.
 
-Son dos ciclos encadenados. El primero define **qué** hay que hacer y lo cierras
-vos; el segundo lo construye.
+There are two chained cycles. The first defines **what** has to be built and
+you close it; the second builds it.
 
 ```
-   tus requisitos ──>  analyst  ──>  specs/REQ-00N.md  ──>  los lees
-   (lenguaje humano)                 (draft, con prioridad)      │
-          ↑                                                      │
-          └──────── agregás / modificás / sacás ─────────────────┤
-                                                                 │ tu OK
-                                    /approve 1 2 ───┘
+   your requirements ──>  analyst  ──>  specs/REQ-00N.md  ──>  you read them
+   (plain language)                     (draft, with priority)      │
+          ↑                                                         │
+          └──────── you add / change / drop ──────────────────────-─┤
+                                                                    │ your OK
+                                       /approve 1 2 ────────────────┘
                                                     │
-                                        (features draft -> pending)
+                                        (draft features -> pending)
                                                     ▼
-leader  ──lanza──>  implementer  ──informe──>  leader  ──lanza──>  reviewer
-                    (escribe código                                (aprueba o
-                     y tests)                                       rechaza)
-                                                                       │
-                                        leader cierra la feature  <────┘
-                                        (solo si APPROVED)
+leader  ──launches──>  implementer  ──report──>  leader  ──launches──>  reviewer
+                       (writes code                                    (approves or
+                        and tests)                                      rejects)
+                                                                            │
+                                        leader closes the feature  <────────┘
+                                        (only if APPROVED)
 ```
 
-Nadie se autoaprueba, en ninguno de los dos ciclos: el analyst propone
-requisitos pero no los aprueba; el implementer deja la feature en
-`in_progress` y para; el reviewer no edita código; el leader no implementa. El
-alcance lo firmas tú (`/approve 1 2`), y el cierre (`status: "done"`)
-solo llega tras un `APPROVED`.
+Nobody approves their own work, in either cycle: the analyst proposes
+requirements but does not approve them; the implementer leaves the feature
+`in_progress` and stops; the reviewer does not edit code; the leader does not
+implement. You sign the scope (`/approve 1 2`), and the close
+(`status: "done"`) only comes after an `APPROVED`.
 
-El primer ciclo no es solo del arranque: si a mitad del desarrollo aparece un
-requisito nuevo, se repite igual. Las features que crea el analyst nacen en
-`draft` y son inertes, así que analizar nunca interrumpe lo que se está
-implementando.
+The first cycle is not only for the start: if a new requirement shows up
+mid-development, it repeats the same way. The features the analyst creates are
+born in `draft` and are inert, so analysing never interrupts what is being
+built.
 
-Atajos: `/requirements`, `/approve 1 2`, `/approve-all`, `/next-feature`,
+Shortcuts: `/requirements`, `/approve 1 2`, `/approve-all`, `/next-feature`,
 `/close-session`, `/harness-check`.
 
-## Dónde queda la traza
+## Where the trail lives
 
-Por el chat **no pasa código** — solo referencias del tipo
-`done -> progress/impl_<feature>.md`. Esa es la regla
-anti-teléfono-descompuesto. El contenido vive en disco y queda versionado:
+**No code goes through the chat** — only references like
+`done -> progress/impl_<feature>.md`. That is the anti-broken-telephone rule.
+The content lives on disk and stays versioned:
 
-| Archivo | Quién lo escribe | Qué contiene |
-|---------|------------------|--------------|
-| `specs/_entrada.md` | analyst | Tus pedidos, textuales y fechados |
-| `specs/REQ-*.md` | analyst | El requisito en SDD; su `estado` es la aprobación |
-| `progress/intake_r<N>.md` | analyst | Qué cambió en la ronda y qué preguntas quedaron |
-| `progress/current.md` | leader | Plan vivo de la sesión |
-| `progress/impl_<feature>.md` | implementer | Archivos tocados + salida de los tests |
-| `progress/review_<feature>.md` | reviewer | Checklist contra `docs/` y `CHECKPOINTS.md` |
+| File | Who writes it | What it holds |
+|------|---------------|---------------|
+| `specs/_intake.md` | analyst | Your requests, verbatim and dated |
+| `specs/REQ-*.md` | analyst | The requirement in SDD; its `status` is the approval |
+| `progress/intake_r<N>.md` | analyst | What changed in the round and which questions are open |
+| `progress/current.md` | leader | The session's live plan |
+| `progress/impl_<feature>.md` | implementer | Files touched + test output |
+| `progress/review_<feature>.md` | reviewer | Checklist against `docs/` and `CHECKPOINTS.md` |
 | `feature_list.json` | analyst → leader → implementer | `draft` → `pending` → `in_progress` → `done` |
-| `progress/history.md` | leader | Resumen append-only al cerrar la sesión |
+| `progress/history.md` | leader | Append-only summary when the session closes |
 
-Abre `progress/` en tu editor mientras Claude trabaja: cada informe aparece en
-cuanto el subagente termina. Así auditas paso a paso quién decidió qué.
+Open `progress/` in your editor while Claude works: each report appears as soon
+as the subagent finishes. That is how you audit, step by step, who decided what.
 
-## Estructura
+## Structure
 
 ```
 .
-├── .github/workflows/harness.yml    # CI: el arnés se verifica a sí mismo
-├── AGENTS.md                        # Mapa para agentes (divulgación progresiva)
-├── CLAUDE.md                        # Fuerza el rol `leader` en cada sesión
-├── CHECKPOINTS.md                   # Criterios de "estado final correcto"
-├── README.md                        # Este archivo
-├── feature_list.json                # Backlog ejecutable, derivado de specs/
-├── init.ps1                         # Verificador (Windows)
-├── init.sh                          # Verificador (POSIX)
-├── bootstrap.ps1                    # Instancia un proyecto nuevo (Windows)
-├── bootstrap.sh                     # Instancia un proyecto nuevo (POSIX)
+├── .github/workflows/harness.yml    # CI: the harness verifies itself
+├── AGENTS.md                        # Map for agents (progressive disclosure)
+├── CLAUDE.md                        # Forces the `leader` role in every session
+├── CHECKPOINTS.md                   # Criteria for a "correct final state"
+├── README.md                        # This file
+├── feature_list.json                # Executable backlog, derived from specs/
+├── init.ps1                         # Verifier (Windows)
+├── init.sh                          # Verifier (POSIX)
+├── bootstrap.ps1                    # Instantiates a new project (Windows)
+├── bootstrap.sh                     # Instantiates a new project (POSIX)
 ├── docs/
-│   ├── architecture.md              # Qué significa "buen trabajo" (lo redacta el analyst, lo apruebas tú)
-│   ├── conventions.md               # Estilo, nombres, errores
-│   ├── verification.md              # Cómo demostrar que funciona
-│   └── scripts.md                   # Referencia de los scripts
+│   ├── architecture.md              # What "good work" means (the analyst drafts it, you approve it)
+│   ├── conventions.md               # Style, names, errors
+│   ├── verification.md              # How to prove it works
+│   └── scripts.md                   # Script reference
 ├── specs/
-│   ├── _plantilla_req.md            # Esqueleto de un requisito en SDD
-│   ├── _entrada.md                  # Tus pedidos en crudo, append-only
-│   └── REQ-00N_<nombre>.md          # Un requisito (estado: draft | aprobado)
+│   ├── _req_template.md             # Skeleton of an SDD requirement
+│   ├── _intake.md                   # Your raw requests, append-only
+│   └── REQ-00N_<name>.md            # One requirement (status: draft | approved)
 ├── progress/
-│   ├── current.md                   # Sesión activa (estado vivo)
-│   ├── intake_r<N>.md               # Informe de cada ronda de análisis
-│   └── history.md                   # Bitácora append-only
+│   ├── current.md                   # Active session (live state)
+│   ├── intake_r<N>.md               # Report of each analysis round
+│   └── history.md                   # Append-only log
 ├── schema/
-│   └── feature_list.schema.json     # Formato de una feature
+│   └── feature_list.schema.json     # Shape of a feature
 ├── scripts/
-│   ├── validate_feature_list.py     # Valida el alcance (lo usan init.ps1 e init.sh)
-│   ├── validate_requirements.py     # Valida requisito -> feature (íd.)
-│   ├── aprobar.py                   # Firma los requisitos que nombras
-│   ├── validate_referencias.py      # Que la documentación no mande a archivos que no existen
-│   ├── instanciar.py                # La lógica de bootstrap, compartida por las dos plataformas
-│   ├── tests/                       # Tests del propio arnés (no los corre init.*)
-│   ├── harness_hook.py              # Los hooks: tests tras cada edición y verificador al cerrar
-│   └── demo_orchestration.py        # Demo del patrón Líder-Trabajador
+│   ├── validate_feature_list.py     # Validates the scope (init.ps1 and init.sh use it)
+│   ├── validate_requirements.py     # Validates requirement -> feature (idem)
+│   ├── approve.py                   # Signs the requirements you name
+│   ├── validate_references.py       # Keeps the docs from pointing at missing files
+│   ├── instantiate.py               # The bootstrap logic, shared by both platforms
+│   ├── tests/                       # The harness's own tests (init.* does not run them)
+│   ├── harness_hook.py              # The hooks: tests after each edit, verifier on close
+│   └── demo_orchestration.py        # Demo of the Leader-Worker pattern
 ├── .claude/
 │   ├── agents/                      # analyst, leader, implementer, reviewer
 │   ├── commands/                    # /requirements, /approve, /approve-all, /next-feature,
 │   │                                #   /close-session, /harness-check
-│   └── settings.json                # Hooks que automatizan la verificación
-├── src/                             # Código de la aplicación (vacío al empezar)
-└── tests/                           # Tests automáticos (vacío al empezar)
+│   └── settings.json                # Hooks that automate verification
+├── src/                             # Application code (empty at the start)
+└── tests/                           # Automated tests (empty at the start)
 ```
 
-## Aprendizajes que ilustra este proyecto
+## What this project illustrates
 
-- **Divulgación progresiva** en `AGENTS.md`: el agente no recibe todas las
-  reglas de golpe, recibe un mapa para buscarlas bajo demanda.
-- **No se trabaja lo que nadie aprobó**: la aprobación de un requisito es un
-  estado en git (`estado: aprobado` + la feature en `pending`), no un mensaje
-  en el chat. Sobrevive a una ventana de contexto perdida; un "dale" no.
-- **El agente pregunta en vez de asumir**, y eso también es ejecutable: un
-  requisito con preguntas abiertas sin responder no se puede aprobar.
-- **Una feature a la vez**, validado por el verificador (rechaza más de un
-  `in_progress` en `feature_list.json`), y por prioridad: primero lo crítico.
-- **Estado en disco**, no en chat: `progress/current.md` y `history.md`
-  sobreviven a reinicios y context windows reventadas.
-- **Un control que nadie ejecuta no es un control**: por eso los tests del
-  propio arnés y la paridad entre `init.ps1` e `init.sh` corren en CI, y no
-  cuando alguien se acuerda.
-- **Verificación ejecutable**: el verificador corre los tests reales, no se fía
-  de lo que diga el agente. Y distingue "0 tests" de "todo verde" — un repo sin
-  tests no está verificado, aunque `unittest` salga con éxito.
-- **Patrón Líder-Trabajador-Revisor**: el líder no implementa, el implementador
-  no se autoaprueba, el revisor no edita código.
-- **Anti teléfono-descompuesto**: los subagentes escriben sus resultados en
-  archivos y solo devuelven una referencia ligera.
-- **Los permisos son parte del diseño**: si un subagente necesita escribir su
-  informe, su frontmatter tiene que incluir `Write`. Un rol sin las herramientas
-  para cumplir su protocolo es un rol roto.
-- **Pero `tools:` restringe por herramienta, no por ruta**, y todos los roles
-  necesitan `Bash`, que es un primitivo de escritura universal. "El reviewer no
-  edita código" es una regla real solo desde que hay un hook que la hace
-  cumplir; antes era una promesa. Cuando una regla importa, hay que preguntarse
-  qué la obliga, no dónde está escrita.
+- **Progressive disclosure** in `AGENTS.md`: the agent does not get every rule
+  at once, it gets a map to look them up on demand.
+- **Nobody works on what nobody approved**: approving a requirement is a state
+  in git (`status: approved` + the feature in `pending`), not a message in the
+  chat. It survives a lost context window; a "sure" does not.
+- **The agent asks instead of assuming**, and that is executable too: a
+  requirement with unanswered open questions cannot be approved.
+- **One feature at a time**, enforced by the verifier (it rejects more than one
+  `in_progress` in `feature_list.json`), and by priority: critical first.
+- **State on disk**, not in the chat: `progress/current.md` and `history.md`
+  survive restarts and blown context windows.
+- **A control nobody runs is not a control**: that is why the harness's own
+  tests and the parity between `init.ps1` and `init.sh` run in CI, not when
+  somebody remembers.
+- **Executable verification**: the verifier runs the real tests, it does not
+  take the agent's word for it. And it tells "0 tests" apart from "all green" —
+  a repo with no tests is not verified, even if `unittest` exits successfully.
+- **Leader-Worker-Reviewer pattern**: the leader does not implement, the
+  implementer does not approve itself, the reviewer does not edit code.
+- **Anti broken telephone**: subagents write their results to files and only
+  return a lightweight reference.
+- **Permissions are part of the design**: if a subagent needs to write its
+  report, its front matter has to include `Write`. A role without the tools to
+  fulfil its protocol is a broken role.
+- **But `tools:` restricts by tool, not by path**, and every role needs `Bash`,
+  which is a universal write primitive. "The reviewer does not edit code" has
+  only been a real rule since a hook enforces it; before that it was a promise.
+  When a rule matters, the question is what compels it, not where it is
+  written.
