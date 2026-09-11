@@ -38,7 +38,7 @@
 | `scripts/validate_requirements.py` | Comprueba que nadie trabaja sobre un requisito sin aprobar (bloqueante) | Lo llama el verificador; a mano si dudas de la trazabilidad |
 | `schema/feature_list.schema.json`  | Formato exacto de una feature                             | Si dudas de la estructura del alcance |
 | `.claude/agents/`                  | Definiciones de subagentes (analista, líder, implementador, revisor) | Si orquestas trabajo |
-| `.claude/commands/`                | Slash commands del ciclo (`/requisitos`, `/aprobar`, `/aprobar-todos`, `/next-feature`, `/close-session`, `/harness-check`) | Para disparar el ciclo sin escribir el prompt |
+| `.claude/commands/`                | Slash commands del ciclo (`/requirements`, `/approve`, `/approve-all`, `/next-feature`, `/close-session`, `/harness-check`) | Para disparar el ciclo sin escribir el prompt |
 | `scripts/demo_orchestration.py`    | Demo del patrón Líder-Trabajador con escritura en disco   | Para entender la regla anti-teléfono-descompuesto |
 | `src/`                             | Código de la aplicación                                   | Para implementar |
 | `tests/`                           | Tests automáticos                                         | Para verificar |
@@ -47,7 +47,7 @@
 
 - **No se trabaja lo que nadie aprobó.** Toda feature sale de un requisito de
   `specs/` y no se toca hasta que ese requisito está `aprobado`. Un "dale" en
-  el chat no es una aprobación; lo es `/aprobar`, que queda en git.
+  el chat no es una aprobación; lo es `/approve`, que queda en git.
 - **Una sola feature a la vez.** No mezcles cambios de varias tareas en la misma sesión.
 - **No declares una tarea `done` sin pruebas verdes.** Ejecuta el verificador y
   asegúrate de que el bloque de tests pasa al 100%. Ojo: `[WARN] 0 tests`

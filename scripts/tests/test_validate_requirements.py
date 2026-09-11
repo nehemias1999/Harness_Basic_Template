@@ -94,7 +94,7 @@ class HarnessCase(unittest.TestCase):
             preguntas=preguntas,
         )
         # Un spec aprobado lleva la huella de su contenido; la calcula
-        # /aprobar-requisitos al firmarlo. Como la huella ignora el
+        # /approve al firmarlo. Como la huella ignora el
         # frontmatter, añadir la línea no la cambia.
         if estado == "aprobado" and "aprobado_hash:" not in content:
             huella = vr.huella_del_spec(content)

@@ -27,8 +27,8 @@ son inertes, así que analizar y desarrollar conviven sin pisarse.
    el analyst no habla con el humano, así que si no las relayás vos, nadie las
    hace. Pásalas tal cual, numeradas, antes de cualquier otra cosa.
 5. Esperas. Si agrega, modifica o saca algo → vuelves al paso 3 con una ronda
-   más. Si da el OK, la aprobación la nombra él por id: `/aprobar 1 2`, o
-   `/aprobar-todos`. Vos no la ejecutás por tu cuenta.
+   más. Si da el OK, la aprobación la nombra él por id: `/approve 1 2`, o
+   `/approve-all`. Vos no la ejecutás por tu cuenta.
 
 **Archivos que toca:** `specs/REQ-*.md`, `specs/_entrada.md`,
 `docs/architecture.md` (borrador), `feature_list.json` (solo features en
@@ -36,4 +36,4 @@ son inertes, así que analizar y desarrollar conviven sin pisarse.
 `tests/`.
 
 **Un "dale" en el chat no aprueba nada.** La aprobación es
-`/aprobar <ids>` o `/aprobar-todos`, que la dejan escrita en git.
+`/approve <ids>` o `/approve-all`, que la dejan escrita en git.

@@ -1,4 +1,4 @@
-"""Tests de scripts/aprobar.py.
+"""Tests de scripts/approve.py.
 
 La firma toca cuatro cosas a la vez y a medio camino el repositorio queda
 incoherente. Lo que más importa cubrir es que no firme cuando no debe, y que
@@ -18,7 +18,7 @@ from contextlib import redirect_stdout
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import aprobar  # noqa: E402
+import approve  # noqa: E402
 import validate_requirements as vr  # noqa: E402
 
 
@@ -112,7 +112,7 @@ class AprobarCase(unittest.TestCase):
     def correr(self, *objetivos: str, dry_run: bool = False) -> tuple[int, str]:
         salida = io.StringIO()
         with redirect_stdout(salida):
-            code = aprobar.Aprobador(self.root, list(objetivos), dry_run, por="tester").ejecutar()
+            code = approve.Aprobador(self.root, list(objetivos), dry_run, por="tester").ejecutar()
         return code, salida.getvalue()
 
 
@@ -141,7 +141,7 @@ class TestFirma(AprobarCase):
     def test_acepta_cualquier_forma_del_id(self) -> None:
         for texto in ("1", "001", "REQ-001", "req-1"):
             with self.subTest(texto=texto):
-                self.assertEqual(aprobar.normalizar_id(texto), "REQ-001")
+                self.assertEqual(approve.normalizar_id(texto), "REQ-001")
 
     def test_todos_firma_los_draft(self) -> None:
         self.spec("REQ-002", "req_dos")
@@ -211,12 +211,12 @@ class TestArquitectura(AprobarCase):
     def test_se_nombra_aparte(self) -> None:
         self.correr("1")
         # Firmar un requisito no toca la arquitectura.
-        self.assertIn(aprobar.MARCADOR_PLANTILLA, self.leer("docs/architecture.md"))
+        self.assertIn(approve.MARCADOR_PLANTILLA, self.leer("docs/architecture.md"))
 
     def test_firma_la_arquitectura(self) -> None:
         code, _ = self.correr("1", "arquitectura")
         self.assertEqual(code, 0)
-        self.assertNotIn(aprobar.MARCADOR_PLANTILLA, self.leer("docs/architecture.md"))
+        self.assertNotIn(approve.MARCADOR_PLANTILLA, self.leer("docs/architecture.md"))
 
     def test_con_huecos_no_firma_nada(self) -> None:
         self.escribir(
@@ -246,7 +246,7 @@ class TestSimulacro(AprobarCase):
         self.assertIn("simulado", salida)
         self.assertEqual(self.leer("specs/REQ-001_req_uno.md"), antes_spec)
         self.assertEqual(self.leer("feature_list.json"), antes_json)
-        self.assertIn(aprobar.MARCADOR_PLANTILLA, self.leer("docs/architecture.md"))
+        self.assertIn(approve.MARCADOR_PLANTILLA, self.leer("docs/architecture.md"))
 
 
 class TestNadaQueAprobar(AprobarCase):

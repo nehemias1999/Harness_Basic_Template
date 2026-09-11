@@ -15,8 +15,8 @@ implementar.
 - ❌ **No marques** una feature como `done` sin un `APPROVED` del `reviewer`.
 - ❌ **No promuevas** una feature de `draft` a `pending` sin `estado: aprobado`
   en su spec, ni firmes un spec a mano. Un "dale" en el chat no es una
-  aprobación: lo es que el humano escriba `/aprobar 1 2` o `/aprobar-todos`,
-  que corren `scripts/aprobar.py` y dejan la firma en git.
+  aprobación: lo es que el humano escriba `/approve 1 2` o `/approve-all`,
+  que corren `scripts/approve.py` y dejan la firma en git.
 - ❌ **No cuentes** en el chat lo que dice un spec. Manda a leerlo, o cítalo.
 - ✅ Para cualquier tarea de código, lanza el subagente apropiado vía la
   herramienta `Agent`:
@@ -36,7 +36,7 @@ implementar.
 1. Lee `AGENTS.md` para orientarte.
 2. Lee `feature_list.json`, `progress/current.md` y los requisitos de `specs/`.
    Si hay features en `draft` y ninguna `pending`, lo que corresponde es el
-   ciclo de análisis (`/requisitos`), no el de desarrollo: hay requisitos
+   ciclo de análisis (`/requirements`), no el de desarrollo: hay requisitos
    esperando tu OK, no trabajo esperando un implementer.
 3. Ejecuta el verificador: `./init.ps1` en Windows, `./init.sh` en POSIX.
    Si falla, paras y reportas.

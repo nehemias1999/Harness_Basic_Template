@@ -41,7 +41,7 @@ heredado — sin eso tu primer `git push` iría al repo de la plantilla.
 Después, en este orden:
 
 1. **Abre Claude Code en la raíz y pásale tus requisitos en lenguaje normal**
-   (o usa `/requisitos`). No hace falta que estén ordenados ni completos: para
+   (o usa `/requirements`). No hace falta que estén ordenados ni completos: para
    eso está el ciclo. El agente `analyst` los deja como specs en `specs/`, uno
    por requisito, con criterios de aceptación verificables y una prioridad — y
    te **pregunta** lo que no sabe en vez de asumirlo. En la primera ronda
@@ -49,10 +49,10 @@ Después, en este orden:
 2. **Léelos e itera.** Agrega, modifica o saca lo que quieras: cada vuelta es
    una ronda y queda registrada en la bitácora de cada spec. Nada se
    implementa mientras tanto.
-3. **Cuando estés conforme, los aprobás por id**: `/aprobar 1 2`, o
-   `/aprobar-todos` para firmar todo lo que esté en borrador. Los specs quedan
+3. **Cuando estés conforme, los aprobás por id**: `/approve 1 2`, o
+   `/approve-all` para firmar todo lo que esté en borrador. Los specs quedan
    firmados y sus features pasan a `pending`. La arquitectura se nombra aparte:
-   `/aprobar 1 arquitectura`.
+   `/approve 1 architecture`.
 
    Ese es el único momento en que el arnés considera que hay trabajo que hacer:
    un "dale" en el chat no aprueba nada. La aprobación es el comando con los
@@ -85,7 +85,7 @@ a `feature_list.json` tú mismo. El arnés valida lo mismo en los dos casos.
 | `bootstrap.ps1` / `bootstrap.sh` | humano | una vez, al instanciar el proyecto |
 | `scripts/validate_project_setup.py` | `init.*` (y a mano) | bloquea el arranque si el proyecto no está configurado |
 | `scripts/validate_requirements.py` | `init.*` (y a mano) | bloquea si se trabaja sobre un requisito sin aprobar |
-| `scripts/aprobar.py` | `/aprobar`, `/aprobar-todos` | cuando firmas requisitos |
+| `scripts/approve.py` | `/approve`, `/approve-all` | cuando firmas requisitos |
 | `scripts/validate_feature_list.py` | `init.*` (y a mano) | para comprobar el alcance |
 | `scripts/harness_hook.py` | hooks `PostToolUse` y `Stop` | automático; bloquean con exit 2 |
 | `scripts/demo_orchestration.py` | humano o agente | para ver el patrón anti-teléfono-descompuesto en acción |
@@ -131,7 +131,7 @@ vos; el segundo lo construye.
           ↑                                                      │
           └──────── agregás / modificás / sacás ─────────────────┤
                                                                  │ tu OK
-                                    /aprobar 1 2 ───┘
+                                    /approve 1 2 ───┘
                                                     │
                                         (features draft -> pending)
                                                     ▼
@@ -146,7 +146,7 @@ leader  ──lanza──>  implementer  ──informe──>  leader  ──lan
 Nadie se autoaprueba, en ninguno de los dos ciclos: el analyst propone
 requisitos pero no los aprueba; el implementer deja la feature en
 `in_progress` y para; el reviewer no edita código; el leader no implementa. El
-alcance lo firmas tú (`/aprobar 1 2`), y el cierre (`status: "done"`)
+alcance lo firmas tú (`/approve 1 2`), y el cierre (`status: "done"`)
 solo llega tras un `APPROVED`.
 
 El primer ciclo no es solo del arranque: si a mitad del desarrollo aparece un
@@ -154,7 +154,7 @@ requisito nuevo, se repite igual. Las features que crea el analyst nacen en
 `draft` y son inertes, así que analizar nunca interrumpe lo que se está
 implementando.
 
-Atajos: `/requisitos`, `/aprobar 1 2`, `/aprobar-todos`, `/next-feature`,
+Atajos: `/requirements`, `/approve 1 2`, `/approve-all`, `/next-feature`,
 `/close-session`, `/harness-check`.
 
 ## Dónde queda la traza
@@ -217,7 +217,7 @@ cuanto el subagente termina. Así auditas paso a paso quién decidió qué.
 │   └── demo_orchestration.py        # Demo del patrón Líder-Trabajador
 ├── .claude/
 │   ├── agents/                      # analyst, leader, implementer, reviewer
-│   ├── commands/                    # /requisitos, /aprobar, /aprobar-todos, /next-feature,
+│   ├── commands/                    # /requirements, /approve, /approve-all, /next-feature,
 │   │                                #   /close-session, /harness-check
 │   └── settings.json                # Hooks que automatizan la verificación
 ├── src/                             # Código de la aplicación (vacío al empezar)

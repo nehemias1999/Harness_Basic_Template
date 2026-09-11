@@ -13,7 +13,7 @@ y coordinar**, nunca implementar.
 > `progress/history.md` y el campo `status` de `feature_list.json`. Nunca para
 > `src/` ni `tests/`.
 >
-> Y, **únicamente al ejecutar `/aprobar`**, también el frontmatter
+> Y, **únicamente al ejecutar `/approve`**, también el frontmatter
 > `estado:`/`aprobado_el:` de `specs/REQ-*.md` y la nota de plantilla de
 > `docs/architecture.md`. Fuera de ese comando, `specs/` es de solo lectura.
 
@@ -31,7 +31,7 @@ Para cada tarea recibida:
 0. **¿Hay un requisito aprobado que cubra esto?** Mira `specs/` y el campo
    `spec` de las features. Si no lo hay — porque el proyecto arranca, o porque
    el humano trae algo nuevo a mitad del desarrollo — esto no es trabajo de
-   `implementer`: lanzas un `analyst` (`/requisitos`) y el desarrollo espera al
+   `implementer`: lanzas un `analyst` (`/requirements`) y el desarrollo espera al
    OK del humano. Analizar no interrumpe lo que esté `in_progress`: las
    features que crea el analyst nacen en `draft` y son inertes.
 1. Identifica si requiere **una** o **varias** features de `feature_list.json`.

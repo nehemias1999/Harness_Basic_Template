@@ -2,10 +2,10 @@
 description: Firma todos los requisitos en draft de una vez.
 ---
 
-Atajo de `/aprobar todos`. Ejecutá:
+Atajo de `/approve all`. Ejecutá:
 
 ```bash
-python scripts/aprobar.py todos
+python scripts/approve.py all
 ```
 
 Antes de correrlo, **decile al humano qué va a firmar**: los ids y títulos de
@@ -14,7 +14,7 @@ cuando venís de una ronda que revisaste entera, y es un error caro cuando se te
 coló uno que no habías leído. Que lo vea antes, no después.
 
 Si quiere firmar además `docs/architecture.md`, eso se nombra aparte:
-`/aprobar todos arquitectura`.
+`/approve all architecture`.
 
 El resto del recorrido —verificador, entrada en `progress/history.md`, cuál es
-la siguiente feature— está en `/aprobar`, y es el mismo.
+la siguiente feature— está en `/approve`, y es el mismo.

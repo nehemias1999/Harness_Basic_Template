@@ -1,13 +1,13 @@
 ---
 description: Firma los requisitos que le nombres por id, y pasa sus features a pending.
-argument-hint: 1 2 [arquitectura]
+argument-hint: 1 2 [architecture]
 ---
 
 El humano nombró qué aprobar: **`$ARGUMENTS`**. Convertí eso en estado
 verificable ejecutando:
 
 ```bash
-python scripts/aprobar.py $ARGUMENTS
+python scripts/approve.py $ARGUMENTS
 ```
 
 Eso es todo lo que tenés que hacer. El script se ocupa de las cuatro cosas que
@@ -21,10 +21,13 @@ exactamente el tipo de trabajo mecánico en el que un agente se saltea un paso.
 | Lo que escribe el humano | Qué firma |
 |---|---|
 | `1 2` · `001 002` · `REQ-001` | esos requisitos |
-| `todos` | todos los que estén en `draft` |
-| `arquitectura` | además, `docs/architecture.md` |
+| `all` | todos los que estén en `draft` |
+| `architecture` | además, `docs/architecture.md` |
 
-`arquitectura` va aparte a propósito: es el criterio contra el que el reviewer
+(`todos` y `arquitectura` también funcionan: el script es tolerante con la
+forma, igual que con los ids. Lo canónico es el inglés, como los comandos.)
+
+`architecture` va aparte a propósito: es el criterio contra el que el reviewer
 juzga **todo** el código, y aprobarlo de rebote junto a un requisito sería el
 descuido que el arnés intenta evitar. Si el humano no lo nombró, no lo agregues
 vos.
