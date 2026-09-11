@@ -34,6 +34,7 @@
 | `CHECKPOINTS.md`                   | Objective criteria for "correct final state"              | To assess yourself |
 | `init.ps1` / `init.sh`             | The verifier (same behaviour on both platforms)           | On start-up and before closing |
 | `bootstrap.ps1` / `bootstrap.sh`   | Instantiates a new project from the template              | Only the first time, and **a human runs it**: it is on the `deny` list |
+| `reset.ps1` / `reset.sh`           | Returns the folder to the template to start another project | When one project ends and the next begins, and **a human runs it**: it is on the `deny` list |
 | `scripts/validate_project_setup.py` | Checks the project is configured (blocking)              | The verifier calls it; by hand if you are unsure what is missing |
 | `scripts/validate_requirements.py` | Checks nobody is working on an unapproved requirement (blocking) | The verifier calls it; by hand if traceability is unclear |
 | `schema/feature_list.schema.json`  | The exact shape of a feature                              | If you are unsure about the scope's structure |

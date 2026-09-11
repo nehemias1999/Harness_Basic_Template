@@ -14,7 +14,12 @@
 # different things one day — the same reason the validators are Python modules.
 #
 # Usage      : ./bootstrap.sh --name "my-project" [--description "What it does."]
+#                             [--repo <url>] [--template-repo <url>]
 #                             [--force] [--reset-git] [--no-git] [--dry-run]
+#
+#              --repo is YOUR project's repository: it becomes `origin`, and
+#              the URL you cloned from is kept as `template`, which is what
+#              lets you reset this folder later for the next project.
 # Exit codes : 0 instantiated · 1 something missing, or already a project.
 
 set -u

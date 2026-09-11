@@ -44,6 +44,11 @@
       "Bash(./bootstrap.sh*)",
       "Bash(python scripts/instantiate.py*)",
       "Bash(python3 scripts/instantiate.py*)",
+      "PowerShell(./reset.ps1*)",
+      "Bash(./reset.ps1*)",
+      "Bash(./reset.sh*)",
+      "Bash(python scripts/reset_workspace.py*)",
+      "Bash(python3 scripts/reset_workspace.py*)",
       "Write(.git/**)",
       "Edit(.git/**)"
     ],

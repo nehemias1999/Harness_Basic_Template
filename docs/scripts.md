@@ -8,6 +8,7 @@
 |--------|-------------|------|
 | `init.ps1` / `init.sh` | agent, `Stop` hook, reviewer | when starting the session and before any `done` |
 | `bootstrap.ps1` / `bootstrap.sh` | human | once, when instantiating a new project from the template |
+| `reset.ps1` / `reset.sh` | human | when the current project is finished and the folder is to host the next one |
 | `scripts/validate_project_setup.py` | `init.*` (and by hand) | blocks start-up if the project is not configured |
 | `scripts/validate_feature_list.py` | `init.*` (and by hand) | whenever the scope needs checking |
 | `scripts/validate_requirements.py` | `init.*` (and by hand) | blocks work on an unapproved requirement |
@@ -15,6 +16,7 @@
 | `scripts/approve.py` | `/approve` and `/approve-all` | when the human signs requirements |
 | `scripts/validate_references.py` | `/harness-check` and CI | to keep the docs from pointing at missing files |
 | `scripts/instantiate.py` | `bootstrap.ps1` and `bootstrap.sh` | the instantiation logic, shared by both platforms |
+| `scripts/reset_workspace.py` | `reset.ps1` and `reset.sh` | the reset logic, shared by both platforms |
 | `scripts/demo_orchestration.py` | human or agent | to understand or demonstrate the anti-broken-telephone pattern |
 | `.github/workflows/harness.yml` | GitHub Actions | on every push and every PR |
 
@@ -105,6 +107,8 @@ copying the repo.
 |---------|-------|--------|
 | `-Name` | `--name` | required; the project's name |
 | `-Description` | `--description` | one line; if omitted, the placeholder stays |
+| `-Repo` | `--repo` | URL of **your project's** repository; it becomes `origin` |
+| `-TemplateRepo` | `--template-repo` | URL of the harness; only if it cannot be worked out from `origin` |
 | `-Force` | `--force` | instantiate even if it is already a project, and reset `history.md` |
 | `-ResetGit` | `--reset-git` | delete the inherited `.git` and start a new history |
 | `-NoGit` | `--no-git` | do not touch git at all |
@@ -146,18 +150,32 @@ history. A project with no repository leaves it working blind, with the only
 thing it has left: the implementer's own report, which is exactly who it has to
 audit. So the script leaves the repository in shape:
 
+It leaves the workspace with **two remotes**, and the distinction is the whole
+model:
+
+| Remote | Points at | What it is for |
+|---|---|---|
+| `origin` | **your project's** repository | where your work is pushed |
+| `template` | the harness's repository | where `reset.*` reads the pristine template from |
+
 | Starting situation | What it does |
 |---|---|
 | You copied the template (no `.git`) | `git init` + base commit `chore: instantiate the harness for <project>` |
-| You **cloned** the template (there is a `.git` with `origin` at the template) | **disconnects `origin`** and warns you are keeping the template's history |
-| You cloned and pass `-ResetGit` | deletes the inherited `.git` and starts a clean history |
-| Your own repo with another `origin` | leaves it alone |
+| You **cloned** the template and pass `-Repo` | `template` = the URL `origin` had; `origin` = yours |
+| You cloned and pass **no** `-Repo` | `template` = the URL `origin` had, and **`origin` is disconnected** |
+| You cloned and pass `-ResetGit` | also deletes the inherited `.git` and starts a clean history |
+| `-Repo` equal to the template's URL | it refuses, before writing anything |
 | `-NoGit` | nothing, with a `[WARN]` |
 
 Disconnecting the `origin` is not cosmetic: if you clone the template and leave
 it alone, **your first `git push` sends the new project to the template's
 repository**. When it disconnects it, the closing checklist adds a step 6 with
-the `git remote add origin <url>` that is on you.
+the `git remote add origin <url>` that is on you — or pass `-Repo` and skip it.
+
+The template's URL is not guessed from its name: it is *whatever `origin` was
+when you ran bootstrap*, because that is where you cloned from. A fork with
+another name works, and a project of yours legitimately named after the
+harness is not mistaken for it.
 
 If git has no identity configured, it sets a provisional local one
 (`harness@localhost`) so the base commit can be made, and says so. Change it
@@ -172,14 +190,104 @@ because there is no code yet).
 
 ---
 
+## `reset.ps1` / `reset.sh` — reusing the template for the next project
+
+One local copy of the harness, many projects, one after another. When the notes
+app is finished and pushed to its own repository, this turns the same folder
+into the ecommerce project.
+
+```powershell
+./reset.ps1 -Name "ecommerce" -Repo "https://github.com/me/ecommerce.git" -WhatIf
+./reset.ps1 -Name "ecommerce" -Repo "https://github.com/me/ecommerce.git" -Description "Online store."
+```
+
+```bash
+./reset.sh --name "ecommerce" --repo "https://github.com/me/ecommerce.git" --dry-run
+./reset.sh --name "ecommerce" --repo "https://github.com/me/ecommerce.git"
+```
+
+**The rule, in three sentences.** Everything git tracked in the previous
+project is deleted. Everything in the template's tree is written in its place.
+Everything git ignored stays where it is, and is listed at the end so you can
+see what came across.
+
+| Windows | POSIX | Effect |
+|---------|-------|--------|
+| `-Name` | `--name` | required; the new project's name |
+| `-Description` | `--description` | one line describing it |
+| `-Repo` | `--repo` | URL of the new project's repository; it becomes `origin` |
+| `-TemplateRepo` | `--template-repo` | URL of the harness; only if there is no `template` remote yet |
+| `-From` | `--from` | a local copy of the template, to work offline |
+| `-Force` | `--force` | reset even with uncommitted changes, unpushed commits or stashes |
+| `-CleanIgnored` | `--clean-ignored` | also delete the files git ignores (`.venv/`, `.env`, …) |
+| `-NoBundle` | `--no-bundle` | do not write the backup bundle of the previous history |
+| `-WhatIf` | `--dry-run` | list everything it would delete and keep, and write nothing |
+
+### The order of operations is the safety design
+
+1. **Work out where the template lives**: `--from` → `--template-repo` → the
+   `template` remote → today's `origin`.
+2. **Preconditions.** It refuses if there are uncommitted changes, stash
+   entries, commits that are not on `origin`, or no `origin` of its own.
+   `--force` gets past these. It **never** gets past `--repo` being the
+   template's own URL: that would push the new project into the harness's
+   repository.
+3. **Clone the template into a temporary folder**, outside the repository, and
+   check that what arrived really is the harness (`feature_list.json` with the
+   placeholder project, plus `scripts/instantiate.py`, `init.sh`, `AGENTS.md`).
+   **Nothing here is deleted until that copy exists and checks out**, so a
+   wrong URL or a network failure leaves the current project exactly as it was.
+4. **Back up.** A `git bundle` with every ref — the stash and the uncommitted
+   tree included — is written next to the folder before `.git` goes.
+5. **Delete, restore, new history**, and then `scripts/instantiate.py` is
+   called on the now-pristine tree: the reset does not reimplement placeholder
+   substitution, it restores and delegates.
+6. **Report what survived.** The previous project's `.env` sitting inside the
+   new one is a real footgun, and silence about it is worse than deleting it.
+
+A side effect worth knowing: every new project starts on the **current**
+harness, not the one you cloned months ago.
+
+`.harness-maintenance` is the one ignored file that does not survive. It
+disarms the `PreToolUse` hook; carrying it over would start the next project
+with the harness's own protection off and nothing in `git status` to say so.
+For the same reason it does not block the reset either.
+
+### Recovering after a reset
+
+```bash
+git clone "../workspace-pre-reset-20260910-143012.bundle" recovered
+```
+
+The bundle holds every branch, every tag, and `refs/harness/pre-reset-wip`
+with whatever was uncommitted.
+
+### Bringing harness improvements into a live project
+
+The `template` remote is also useful without resetting anything. To pull in
+fixes to the harness itself while a project is running:
+
+```bash
+git fetch template
+git checkout template/main -- scripts/ docs/scripts.md init.sh init.ps1
+./init.sh
+```
+
+Pick the paths deliberately: `feature_list.json`, `specs/` and `progress/`
+belong to your project and must not come from the template.
+
+---
+
 ## Permissions: `deny` beats `allow`
 
 `.claude/settings.json` no longer pre-approves `bootstrap.ps1`: it is on
-`deny`. Instantiating a project is a human act — `AGENTS.md` and this very
-document say so — and the script empties `features`, deletes the requirements
-in `specs/` and can delete `.git` entirely. Having it on `allow` meant an agent
-could run it without a single confirmation. If you need to run it, run it
-yourself.
+`deny`, and `reset.ps1` / `reset.sh` are there with it. Instantiating or
+resetting a project is a human act — `AGENTS.md` and this very document say
+so — and between them these scripts empty `features`, delete the requirements
+in `specs/`, delete the whole working copy and delete `.git`. Having them on
+`allow` meant an agent could run them without a single confirmation. If you
+need to run one, run it yourself: in Claude Code's terminal, prefix it with
+`!`.
 
 The `allow` patterns are now **exact**, with no trailing wildcards. A pattern
 like `PowerShell(./init.ps1*)` also pre-approved
