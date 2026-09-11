@@ -13,7 +13,7 @@
 | `scripts/validate_feature_list.py` | `init.*` (y a mano) | siempre que haya que comprobar el alcance |
 | `scripts/validate_requirements.py` | `init.*` (y a mano) | bloquea si se está trabajando sobre un requisito sin aprobar |
 | `scripts/harness_hook.py` | hooks `PostToolUse` y `Stop` | automático; bloquean con exit 2 |
-| `scripts/aprobar.py` | `/aprobar` y `/aprobar-todos` | cuando el humano firma requisitos |
+| `scripts/approve.py` | `/approve` y `/approve-all` | cuando el humano firma requisitos |
 | `scripts/validate_referencias.py` | `/harness-check` y el CI | para que la documentación no mande a archivos que no existen |
 | `scripts/instanciar.py` | `bootstrap.ps1` y `bootstrap.sh` | la lógica de instanciación, compartida por las dos plataformas |
 | `scripts/demo_orchestration.py` | humano o agente | para entender o demostrar el patrón anti-teléfono-descompuesto |
@@ -71,14 +71,14 @@ Los `[WARN]` **no** bloquean; los `[FAIL]` sí.
 | `No se encontró un Python ejecutable` | instala Python >= 3.9 o arregla el PATH |
 | `Falta archivo base: X` | el arnés está incompleto: recupera `X` (ver `CHECKPOINTS.md` C1) |
 | `Este repositorio es la plantilla del arnés SIN INSTANCIAR` | ejecuta `./bootstrap.ps1 -Name "..."` |
-| `docs/architecture.md tiene placeholders sin rellenar` | pídeselo al `analyst` (`/requisitos`); es el criterio del reviewer, sin él no hay revisión posible |
-| `sigue en estado "draft" (nadie aprobó ese requisito)` | el humano lo aprueba con `/aprobar <id>`, o se devuelve la feature a `draft` |
+| `docs/architecture.md tiene placeholders sin rellenar` | pídeselo al `analyst` (`/requirements`); es el criterio del reviewer, sin él no hay revisión posible |
+| `sigue en estado "draft" (nadie aprobó ese requisito)` | el humano lo aprueba con `/approve <id>`, o se devuelve la feature a `draft` |
 | `"rules.…" vale … y el arnés trabaja con …` | alguien aflojó una regla del arnés editando `feature_list.json`: devuélvela a su valor |
 | `ni un solo test en tests/` | una feature `done` sin pruebas: escribe los tests o reabre la feature |
 | `aprobado_el … tiene que ser una fecha` | pon la fecha real de aprobación en formato `AAAA-MM-DD` |
 | `el frontmatter repite …` | hay dos veces la misma clave en el spec: deja una |
 | `apunta a specs/... que no existe` | corrige el campo `spec` de la feature, o recupera el archivo |
-| `está aprobado pero ninguna feature lo referencia` | deriva sus features (`/requisitos`) o vuelve el spec a `draft` |
+| `está aprobado pero ninguna feature lo referencia` | deriva sus features (`/requirements`) o vuelve el spec a `draft` |
 | `y ningún requisito aprobado` | hay código sin alcance aprobado: define y aprueba los requisitos antes de seguir |
 | `Hay N features en in_progress` | cierra o revierte las features de más: una a la vez |
 | `No se pudieron descubrir los tests` | hay un error de import en `tests/`; ejecuta el discover a mano para verlo |
@@ -280,7 +280,7 @@ python scripts/validate_requirements.py           # el repo actual
 python scripts/validate_requirements.py ../otro
 ```
 
-**La huella de lo aprobado.** Al firmar un requisito, `/aprobar`
+**La huella de lo aprobado.** Al firmar un requisito, `/approve`
 guarda en `aprobado_hash` una huella de su contenido, y el validador la
 recalcula en cada corrida. Sin eso, "aprobado" solo significaba que alguien
 escribió la palabra: editarle los criterios después no dejaba ni rastro, y el
@@ -328,17 +328,17 @@ distinguir "sin verificar" de "verificado". Los corre `/harness-check`, o tú:
 
 ---
 
-## `scripts/aprobar.py` — firmar requisitos
+## `scripts/approve.py` — firmar requisitos
 
 El paso mecánico de la aprobación. El humano dice **qué** aprobar; el script se
 ocupa de las cuatro cosas que hay que tocar a la vez.
 
 ```bash
-python scripts/aprobar.py 1 2             # REQ-001 y REQ-002
-python scripts/aprobar.py REQ-003         # da igual cómo escribas el id
-python scripts/aprobar.py todos           # todos los que estén en draft
-python scripts/aprobar.py 1 arquitectura  # y además firma docs/architecture.md
-python scripts/aprobar.py todos --dry-run
+python scripts/approve.py 1 2             # REQ-001 y REQ-002
+python scripts/approve.py REQ-003         # da igual cómo escribas el id
+python scripts/approve.py all             # todos los que estén en draft
+python scripts/approve.py 1 architecture  # y además firma docs/architecture.md
+python scripts/approve.py all --dry-run
 ```
 
 Por cada requisito nombrado: `estado: draft` → `aprobado`, la fecha de hoy en
@@ -355,12 +355,12 @@ que hace verificable la aprobación: la huella.
 preguntas sin responder, ya estaba aprobado, o `docs/architecture.md` conserva
 huecos— no se escribe nada. Firmar la mitad deja un estado que nadie pidió.
 
-**`arquitectura` se nombra aparte** a propósito: es el criterio contra el que el
+**`architecture` se nombra aparte** a propósito: es el criterio contra el que el
 reviewer juzga *todo* el código, y aprobarlo de rebote junto a un requisito
 sería el descuido que el arnés intenta evitar.
 
 **No está en la lista de permisos, y es a propósito.** Cuando el agente lo
-ejecuta, Claude Code te muestra el comando exacto —`python scripts/aprobar.py
+ejecuta, Claude Code te muestra el comando exacto —`python scripts/approve.py
 1 2`— y espera tu confirmación. Ese aviso es la última oportunidad de ver *qué*
 se está firmando antes de que se firme, y sale gratis.
 
@@ -383,7 +383,7 @@ hacer, una vez:
    "valid_status": ["draft", "pending", "in_progress", "done", "blocked"]
    ```
 2. Cada feature necesita `spec` y `prioridad`. Si el trabajo ya está hecho y no
-   hay requisito escrito, escribí uno retroactivo con `/requisitos` que cubra
+   hay requisito escrito, escribí uno retroactivo con `/requirements` que cubra
    lo que existe: es más honesto que inventar un puntero, y deja el "por qué"
    documentado antes de que se pierda.
 3. Las features `done` necesitan sus informes en `progress/`. Si son de antes y

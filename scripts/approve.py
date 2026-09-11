@@ -12,11 +12,11 @@ Propósito
     aprobado.
 
 Uso
-    python scripts/aprobar.py 1 2            # REQ-001 y REQ-002
-    python scripts/aprobar.py REQ-003        # da igual cómo escribas el id
-    python scripts/aprobar.py todos          # todos los que estén en draft
-    python scripts/aprobar.py 1 arquitectura # y además firma docs/architecture.md
-    python scripts/aprobar.py todos --dry-run
+    python scripts/approve.py 1 2            # REQ-001 y REQ-002
+    python scripts/approve.py REQ-003        # da igual cómo escribas el id
+    python scripts/approve.py all            # todos los que estén en draft
+    python scripts/approve.py 1 architecture # y además firma docs/architecture.md
+    python scripts/approve.py all --dry-run
 
 Qué hace por cada requisito nombrado
     1. `estado: draft` -> `aprobado`, con `aprobado_el` y `actualizado` de hoy.
@@ -24,7 +24,7 @@ Qué hace por cada requisito nombrado
     3. Añade la fila de la bitácora (§8).
     4. Pasa sus features de `draft` a `pending`.
 
-La palabra `arquitectura`
+La palabra `architecture`
     Borra la nota de plantilla de `docs/architecture.md`, que es el acto por el
     que ese documento queda aprobado. Va aparte y hay que nombrarla a propósito:
     es el criterio contra el que el reviewer juzga todo el código, y aprobarlo
@@ -50,8 +50,10 @@ import validate_requirements as vr  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-TODOS = "todos"
-ARQUITECTURA = "arquitectura"
+# Las palabras clave van en inglés, como los comandos. Se aceptan igual en
+# español: la misma tolerancia que con los ids, que valen como 1, 001 o REQ-001.
+TODOS = ("all", "todos")
+ARQUITECTURA = ("architecture", "arquitectura")
 MARCADOR_PLANTILLA = "Este archivo es una plantilla"
 ID_RE = re.compile(r"^(?:req-)?0*(\d{1,3})$", re.IGNORECASE)
 # Ojo con `\s*$`: se come el salto de línea final y la fila nueva queda
@@ -124,10 +126,10 @@ class Aprobador:
 
         for objetivo in self.objetivos:
             plano = objetivo.strip().lower().rstrip(",")
-            if plano == ARQUITECTURA:
+            if plano in ARQUITECTURA:
                 arquitectura = True
                 continue
-            if plano == TODOS:
+            if plano in TODOS:
                 pedidos.extend(
                     rel for rel, spec in sorted(self.specs.items())
                     if spec["estado"] == vr.DRAFT
@@ -138,7 +140,7 @@ class Aprobador:
             if not req_id:
                 errores.append(
                     f'no entiendo "{objetivo}": usa un id (1, 001, REQ-001), '
-                    f'"{TODOS}" o "{ARQUITECTURA}"'
+                    f'"{TODOS[0]}" o "{ARQUITECTURA[0]}"'
                 )
                 continue
 
@@ -314,7 +316,7 @@ class Aprobador:
         if rutas and not promovidas:
             warn(
                 "ningún requisito tenía features en draft: derivalas con "
-                "/requisitos antes de seguir, o el verificador lo va a decir"
+                "/requirements antes de seguir, o el verificador lo va a decir"
             )
         ok(f"{len(rutas)} requisito(s) firmados, {promovidas} feature(s) en pending")
         print("        Siguiente: ejecutá el verificador y después /next-feature.")
@@ -336,7 +338,7 @@ def main(argv: list[str]) -> int:
         "objetivos",
         nargs="+",
         metavar="ID",
-        help='ids (1, 001, REQ-001), "todos", o "arquitectura"',
+        help='ids (1, 001, REQ-001), "all", o "architecture"',
     )
     parser.add_argument("--dry-run", action="store_true", help="No escribe nada")
     parser.add_argument("--por", default="", help="Quién aprueba (para la bitácora)")

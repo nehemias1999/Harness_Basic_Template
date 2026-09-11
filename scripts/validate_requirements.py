@@ -36,7 +36,7 @@ Qué solo avisa (`[WARN]`)
     - Todavía no existe `specs/`, o no hay ningún requisito.
     - Hay requisitos en `draft` esperando el OK del humano.
     - Un spec aprobado cuyas features siguen todas en `draft` (aprobación a
-      medias: falta terminar `/aprobar-requisitos`).
+      medias: falta terminar `/approve`).
     - Un spec `descartado` del que todavía cuelgan features en `draft`.
     - Hay una feature `in_progress` de menor prioridad que algo encolado. El
       arnés avisa del adelantamiento; decidir si se interrumpe es del humano.
@@ -50,7 +50,7 @@ Uso
     python scripts/validate_requirements.py --huella specs/REQ-001_x.md
 
     La segunda forma imprime la huella del contenido de un spec: es lo que
-    escribe `/aprobar-requisitos` en `aprobado_hash` al firmarlo.
+    escribe `/approve` en `aprobado_hash` al firmarlo.
 
 Exit codes
     0  la trazabilidad requisito -> feature es coherente (los [WARN] no bloquean)
@@ -277,12 +277,12 @@ def check(root: str) -> tuple[list[str], list[str]]:
     if not os.path.isdir(os.path.join(root, SPEC_DIR)):
         warns.append(
             "todavía no existe specs/: el proyecto no tiene alcance aprobado, "
-            "así que no hay nada que desarrollar. Empieza por /requisitos"
+            "así que no hay nada que desarrollar. Empieza por /requirements"
         )
     elif not specs:
         warns.append(
             "specs/ no tiene ningún requisito todavía: no hay alcance aprobado, "
-            "así que no hay nada que desarrollar. Empieza por /requisitos"
+            "así que no hay nada que desarrollar. Empieza por /requirements"
         )
 
     # --- feature_list.json --------------------------------------------------
@@ -386,7 +386,7 @@ def check(root: str) -> tuple[list[str], list[str]]:
             fails.append(
                 f"{rel}: está aprobado pero no tiene aprobado_hash. Sin huella "
                 f"del texto aprobado, editarle los criterios después no deja "
-                f"rastro: vuelve a aprobarlo con /aprobar-requisitos"
+                f"rastro: vuelve a aprobarlo con /approve"
             )
         elif huella_declarada != spec["_huella"]:
             fails.append(
@@ -409,7 +409,7 @@ def check(root: str) -> tuple[list[str], list[str]]:
         elif all(f.get("status") == "draft" for f in suyas):
             warns.append(
                 f"{rel}: aprobado pero sus {len(suyas)} feature(s) siguen en draft "
-                f"(aprobación a medias: termina /aprobar-requisitos)"
+                f"(aprobación a medias: termina /approve)"
             )
 
     if en_draft:

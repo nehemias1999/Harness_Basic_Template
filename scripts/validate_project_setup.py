@@ -119,7 +119,7 @@ def check(root: str) -> tuple[list[str], list[str], bool]:
             architecture_unset = True
             architecture_issues.append(
                 "docs/architecture.md sigue siendo la plantilla sin rellenar. "
-                "Léela y apruébala: python scripts/aprobar.py arquitectura"
+                "Léela y apruébala: python scripts/approve.py arquitectura"
             )
         if placeholders:
             architecture_unset = True
@@ -180,7 +180,7 @@ def main(argv: list[str]) -> int:
         print("")
         print('          ./bootstrap.ps1 -Name "mi-proyecto" -Description "Qué hace."')
         print("")
-        print("        Después pásale tus requisitos en lenguaje normal (/requisitos):")
+        print("        Después pásale tus requisitos en lenguaje normal (/requirements):")
         print("        el analyst los deja en specs/ y redacta docs/architecture.md,")
         print("        y tú los apruebas. Ver README.md § Arranque rápido.")
         return 1

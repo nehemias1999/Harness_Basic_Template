@@ -23,7 +23,7 @@ Qué hace
 
 Lo que NO hace
     Definir el alcance. El borrador de `docs/architecture.md` y los requisitos
-    los redacta el agente `analyst` (`/requisitos`), pero aprobarlos es tuyo, y
+    los redacta el agente `analyst` (`/requirements`), pero aprobarlos es tuyo, y
     hasta que lo hagas el verificador no se pone verde.
 
 Uso
@@ -340,10 +340,10 @@ class Instanciador:
         print("")
         print("-- Siguiente paso (a mano) ----------------------------")
         print("  1. Abre Claude Code en la raíz y pásale tus requisitos en lenguaje normal")
-        print("     (o usa /requisitos). El analyst los deja en specs/ y redacta un")
+        print("     (o usa /requirements). El analyst los deja en specs/ y redacta un")
         print("     borrador de docs/architecture.md.")
         print("  2. Léelos y pídele los cambios que hagan falta: cada vuelta es una ronda.")
-        print("  3. Cuando estés conforme: /aprobar-requisitos. Ahí las features pasan a")
+        print("  3. Cuando estés conforme: /approve. Ahí las features pasan a")
         print("     pending y se aprueba la arquitectura.")
         print("  4. Ejecuta el verificador — debe quedar verde.")
         print("  5. /next-feature para arrancar el desarrollo.")
