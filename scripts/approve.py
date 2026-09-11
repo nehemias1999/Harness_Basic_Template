@@ -50,10 +50,8 @@ import validate_requirements as vr  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# The keywords are English, like the commands. Spanish still works: the same
-# tolerance the ids get, which are valid as 1, 001 or REQ-001.
-ALL = ("all", "todos")
-ARCHITECTURE = ("architecture", "arquitectura")
+ALL = "all"
+ARCHITECTURE = "architecture"
 TEMPLATE_MARKER = "This file is a template"
 ID_RE = re.compile(r"^(?:req-)?0*(\d{1,3})$", re.IGNORECASE)
 # Careful with `\s*$`: it eats the trailing newline and the new row ends up
@@ -126,10 +124,10 @@ class Approver:
 
         for target in self.targets:
             plain = target.strip().lower().rstrip(",")
-            if plain in ARCHITECTURE:
+            if plain == ARCHITECTURE:
                 architecture = True
                 continue
-            if plain in ALL:
+            if plain == ALL:
                 requested.extend(
                     rel for rel, spec in sorted(self.specs.items())
                     if spec["status"] == vr.DRAFT
@@ -140,7 +138,7 @@ class Approver:
             if not req_id:
                 errors.append(
                     f'I do not understand "{target}": use an id (1, 001, REQ-001), '
-                    f'"{ALL[0]}" or "{ARCHITECTURE[0]}"'
+                    f'"{ALL}" or "{ARCHITECTURE}"'
                 )
                 continue
 
