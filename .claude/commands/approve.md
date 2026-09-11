@@ -24,9 +24,6 @@ exactly the kind of mechanical work where an agent skips a step.
 | `all` | every requirement in `draft` |
 | `architecture` | additionally, `docs/architecture.md` |
 
-(`todos` and `arquitectura` work too: the script is forgiving about the form,
-just as it is with ids. English is canonical, like the commands.)
-
 `architecture` goes separately on purpose: it is the criterion the reviewer
 judges **all** the code against, and approving it as a side effect of a
 requirement would be the oversight the harness is trying to prevent. If the

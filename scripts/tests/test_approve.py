@@ -152,10 +152,14 @@ class TestSigning(ApproveCase):
         self.assertIn("REQ-002", output)
         self.assertNotIn("REQ-003 ->", output)
 
-    def test_the_spanish_keyword_still_works(self) -> None:
-        code, output = self.run_approve("todos")
-        self.assertEqual(code, 0)
-        self.assertIn("REQ-001", output)
+    def test_only_the_english_keywords_are_accepted(self) -> None:
+        # There is one canonical spelling. The ids stay forgiving; the keywords
+        # do not, so there is no second vocabulary to keep in sync.
+        for word in ("todos", "arquitectura"):
+            with self.subTest(word=word):
+                code, output = self.run_approve(word)
+                self.assertEqual(code, 1)
+                self.assertIn("I do not understand", output)
 
     def test_it_appends_the_log_row_attached_to_the_table(self) -> None:
         self.run_approve("1")
