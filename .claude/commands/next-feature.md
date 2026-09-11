@@ -1,37 +1,38 @@
 ---
-description: Ejecuta el ciclo completo del arnés sobre la siguiente feature pendiente.
+description: Runs the full harness cycle on the next pending feature.
 ---
 
-Coge la siguiente feature `pending` de `feature_list.json` — la de **prioridad
-más alta** (`critica` > `alta` > `media` > `baja`) y, a igual prioridad, la de
-`id` menor — y ejecuta el ciclo completo del arnés como `leader`.
+Take the next `pending` feature from `feature_list.json` — the one with the
+**highest priority** (`critical` > `high` > `medium` > `low`) and, at equal
+priority, the lowest `id` — and run the full harness cycle as `leader`.
 
-**Qué dispara:**
+**What it triggers:**
 
-1. Verificador (`./init.ps1` en Windows, `./init.sh` en POSIX). Si está rojo,
-   paras aquí y reportas.
-2. Anota la feature elegida y el plan en `progress/current.md`.
-3. Lanza un subagente `implementer` con la feature. Instrúyele para escribir su
-   informe en `progress/impl_<feature>.md` y devolverte **solo la referencia**.
-4. Cuando termine, lanza un subagente `reviewer`. Su informe va a
+1. The verifier (`./init.ps1` on Windows, `./init.sh` on POSIX). If it is red,
+   you stop here and report.
+2. Record the chosen feature and the plan in `progress/current.md`.
+3. Launch an `implementer` subagent with the feature. Instruct it to write its
+   report to `progress/impl_<feature>.md` and return **only the reference**.
+4. When it finishes, launch a `reviewer` subagent. Its report goes to
    `progress/review_<feature>.md`.
-5. Si `APPROVED` → cierras la feature: `status: "done"`, entrada en
-   `progress/history.md`, `progress/current.md` vacío, verificador verde.
-   Si `CHANGES_REQUESTED` → relanzas al implementer pasándole la **ruta** del
-   review, no su contenido.
+5. If `APPROVED` → you close the feature: `status: "done"`, an entry in
+   `progress/history.md`, an empty `progress/current.md`, a green verifier.
+   If `CHANGES_REQUESTED` → you relaunch the implementer passing it the **path**
+   of the review, not its content.
 
-**Archivos que toca:** `feature_list.json` (el campo `status`, y solo para
-cerrar: el paso a `in_progress` lo hace el implementer al tomar la feature),
-`progress/current.md`, `progress/history.md`, `progress/impl_<feature>.md`,
-`progress/review_<feature>.md`, y `src/` + `tests/` (vía el implementer, nunca
-tú directamente).
+**Files it touches:** `feature_list.json` (the `status` field, and only to
+close: moving to `in_progress` is done by the implementer when it takes the
+feature), `progress/current.md`, `progress/history.md`,
+`progress/impl_<feature>.md`, `progress/review_<feature>.md`, and `src/` +
+`tests/` (through the implementer, never you directly).
 
-**Si no hay features `pending`:** dilo y para. No inventes una.
+**If there are no `pending` features:** say so and stop. Do not invent one.
 
-- Si además hay features en `draft`, el problema no es que falte trabajo: hay
-  requisitos esperando el OK del humano. Dile cuáles y sugiérele
-  `/approve <ids>` o `/approve-all`.
-- Si tampoco hay `draft`, el proyecto todavía no tiene alcance: `/requirements`.
+- If there are also features in `draft`, the problem is not a lack of work:
+  there are requirements waiting for the human's OK. Tell them which ones and
+  suggest `/approve <ids>` or `/approve-all`.
+- If there are no `draft` ones either, the project has no scope yet:
+  `/requirements`.
 
-**`specs/` es de solo lectura en este ciclo.** Si un criterio de `acceptance`
-está mal, el que está mal es el requisito: paras y lo dices, no lo reescribes.
+**`specs/` is read-only in this cycle.** If an `acceptance` criterion is wrong,
+what is wrong is the requirement: you stop and say so, you do not rewrite it.

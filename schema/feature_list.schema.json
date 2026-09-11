@@ -2,60 +2,122 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "$id": "https://example.invalid/harness/feature_list.schema.json",
   "title": "feature_list",
-  "description": "Alcance del proyecto: la lista de features y su estado. Este archivo es DOCUMENTACIÓN: ningún script lo carga (el arnés no tiene dependencias externas, así que no hay jsonschema). Quien hace cumplir estas mismas reglas es scripts/validate_feature_list.py, a mano y con los mismos tipos y patrones; si tocas uno, toca el otro. Las features se derivan de los requisitos aprobados en specs/ (ver scripts/validate_requirements.py).",
+  "description": "The project scope: the list of features and their status. This file is DOCUMENTATION: no script loads it (the harness has no external dependencies, so there is no jsonschema). What enforces these same rules is scripts/validate_feature_list.py, by hand and with the same types and patterns; if you touch one, touch the other. Features are derived from the approved requirements in specs/ (see scripts/validate_requirements.py).",
   "type": "object",
-  "required": ["project", "rules", "features"],
+  "required": [
+    "project",
+    "rules",
+    "features"
+  ],
   "properties": {
-    "project": { "type": "string", "minLength": 1 },
-    "description": { "type": "string" },
+    "project": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
     "rules": {
       "type": "object",
-      "required": ["one_feature_at_a_time", "require_tests_to_close", "valid_status"],
+      "required": [
+        "one_feature_at_a_time",
+        "require_tests_to_close",
+        "valid_status"
+      ],
       "properties": {
-        "one_feature_at_a_time": { "type": "boolean" },
-        "require_tests_to_close": { "type": "boolean" },
-        "orden_de_trabajo": {
-          "description": "Cómo se elige la siguiente feature: primero la prioridad más alta, y a igual prioridad el id menor.",
-          "enum": ["prioridad_luego_id"]
+        "one_feature_at_a_time": {
+          "type": "boolean"
+        },
+        "require_tests_to_close": {
+          "type": "boolean"
+        },
+        "work_order": {
+          "description": "How the next feature is chosen: highest priority first, and at equal priority the lowest id.",
+          "enum": [
+            "priority_then_id"
+          ]
         },
         "valid_status": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "minItems": 1
         }
       }
     },
-    "_example": { "type": "object" },
+    "_example": {
+      "type": "object"
+    },
     "features": {
       "type": "array",
-      "items": { "$ref": "#/definitions/feature" }
+      "items": {
+        "$ref": "#/definitions/feature"
+      }
     }
   },
   "definitions": {
     "feature": {
       "type": "object",
-      "required": ["id", "name", "title", "description", "spec", "prioridad", "acceptance", "status"],
+      "required": [
+        "id",
+        "name",
+        "title",
+        "description",
+        "spec",
+        "priority",
+        "acceptance",
+        "status"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "integer", "minimum": 1 },
-        "name": { "type": "string", "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$" },
-        "title": { "type": "string", "minLength": 1 },
-        "description": { "type": "string", "minLength": 1 },
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
         "spec": {
-          "description": "Ruta al requisito del que sale esta feature. El puntero va en una sola dirección: de la feature al spec.",
+          "description": "Path to the requirement this feature comes from. The pointer goes one way only: from the feature to the spec.",
           "type": "string",
           "pattern": "^specs/REQ-\\d{3}_[a-z0-9]+(?:_[a-z0-9]+)*\\.md$"
         },
-        "prioridad": {
-          "description": "Heredada del requisito. Una feature puede bajarla si es una parte accesoria; nunca subirla.",
-          "enum": ["critica", "alta", "media", "baja"]
+        "priority": {
+          "description": "Inherited from the requirement. A feature may lower it if it is an accessory part; never raise it.",
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ]
         },
         "acceptance": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "minItems": 1
         },
-        "status": { "enum": ["draft", "pending", "in_progress", "done", "blocked"] }
+        "status": {
+          "enum": [
+            "draft",
+            "pending",
+            "in_progress",
+            "done",
+            "blocked"
+          ]
+        }
       }
     }
   }

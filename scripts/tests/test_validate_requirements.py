@@ -1,11 +1,12 @@
-"""Tests de scripts/validate_requirements.py.
+"""Tests for scripts/validate_requirements.py.
 
-Viven aquí y no en `tests/` a propósito: `tests/` es del proyecto, y el
-verificador lo descubre con `unittest discover -s tests`. Si estos tests
-estuvieran ahí, un proyecto recién instanciado saldría "verde" con tests que
-no son suyos, y el arnés dejaría de distinguir "sin verificar" de "verificado".
+They live here and not in `tests/` on purpose: `tests/` belongs to the project,
+and the verifier discovers it with `unittest discover -s tests`. If these tests
+were in there, a freshly instantiated project would come out "green" with tests
+that are not its own, and the harness would stop telling "unverified" apart from
+"verified".
 
-Se ejecutan a mano o desde /harness-check:
+They are run by hand or from /harness-check:
 
     python -m unittest discover -s scripts/tests -v
 """
@@ -24,32 +25,32 @@ import validate_requirements as vr  # noqa: E402
 
 SPEC = """---
 id: {spec_id}
-titulo: Un requisito de prueba
-estado: {estado}
-prioridad: {prioridad}
-creado: 2026-09-10
-actualizado: 2026-09-10
-aprobado_el: {aprobado_el}
-ronda: 1
+title: A test requirement
+status: {status}
+priority: {priority}
+created: 2026-09-10
+updated: 2026-09-10
+approved_on: {approved_on}
+round: 1
 ---
 
-# {spec_id} — Un requisito de prueba
+# {spec_id} — A test requirement
 
-## 6. Supuestos y preguntas abiertas
+## 6. Assumptions and open questions
 
-{preguntas}
+{questions}
 """
 
 
 def feature(**kwargs) -> dict:
     base = {
         "id": 1,
-        "name": "una_feature",
-        "title": "Una feature",
-        "description": "Qué hace.",
-        "spec": "specs/REQ-001_un_requisito.md",
-        "prioridad": "media",
-        "acceptance": ["hace algo verificable"],
+        "name": "a_feature",
+        "title": "A feature",
+        "description": "What it does.",
+        "spec": "specs/REQ-001_a_requirement.md",
+        "priority": "medium",
+        "acceptance": ["does something verifiable"],
         "status": "draft",
     }
     base.update(kwargs)
@@ -57,7 +58,7 @@ def feature(**kwargs) -> dict:
 
 
 class HarnessCase(unittest.TestCase):
-    """Monta un repo de mentira en un directorio temporal."""
+    """Sets up a fake repo in a temporary directory."""
 
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -71,41 +72,41 @@ class HarnessCase(unittest.TestCase):
 
     # -- helpers ---------------------------------------------------------
     def write_features(self, features: list[dict]) -> None:
-        payload = {"project": "prueba", "rules": {}, "features": features}
+        payload = {"project": "test", "rules": {}, "features": features}
         path = os.path.join(self.root, "feature_list.json")
         with open(path, "w", encoding="utf-8", newline="\n") as handle:
             json.dump(payload, handle, ensure_ascii=False, indent=2)
 
     def write_spec(
         self,
-        name: str = "REQ-001_un_requisito.md",
+        name: str = "REQ-001_a_requirement.md",
         spec_id: str = "REQ-001",
-        estado: str = "draft",
-        prioridad: str = "media",
-        aprobado_el: str = "",
-        preguntas: str = "- [x] **P1:** respondida",
+        status: str = "draft",
+        priority: str = "medium",
+        approved_on: str = "",
+        questions: str = "- [x] **Q1:** answered",
         body: str | None = None,
     ) -> None:
         content = body if body is not None else SPEC.format(
             spec_id=spec_id,
-            estado=estado,
-            prioridad=prioridad,
-            aprobado_el=aprobado_el,
-            preguntas=preguntas,
+            status=status,
+            priority=priority,
+            approved_on=approved_on,
+            questions=questions,
         )
-        # Un spec aprobado lleva la huella de su contenido; la calcula
-        # /approve al firmarlo. Como la huella ignora el
-        # frontmatter, añadir la línea no la cambia.
-        if estado == "aprobado" and "aprobado_hash:" not in content:
-            huella = vr.huella_del_spec(content)
-            cabecera, resto = content.split("\n---\n", 1)
-            content = f"{cabecera}\naprobado_hash: {huella}\n---\n{resto}"
+        # An approved spec carries its content fingerprint; /approve computes it
+        # when signing. Since the fingerprint ignores the front matter, adding
+        # the line does not change it.
+        if status == "approved" and "approved_hash:" not in content:
+            fingerprint = vr.spec_fingerprint(content)
+            header, rest = content.split("\n---\n", 1)
+            content = f"{header}\napproved_hash: {fingerprint}\n---\n{rest}"
         with open(os.path.join(self.root, "specs", name), "w", encoding="utf-8", newline="\n") as h:
             h.write(content)
 
-    def write_module(self, name: str = "cosa.py") -> None:
+    def write_module(self, name: str = "thing.py") -> None:
         with open(os.path.join(self.root, "src", name), "w", encoding="utf-8") as handle:
-            handle.write('"""Un módulo."""\n')
+            handle.write('"""A module."""\n')
 
     def check(self) -> tuple[list[str], list[str]]:
         return vr.check(self.root)
@@ -114,7 +115,7 @@ class HarnessCase(unittest.TestCase):
         fails, _ = self.check()
         self.assertTrue(
             any(needle in f for f in fails),
-            f"ningún [FAIL] contiene {needle!r}. Fallos: {fails}",
+            f"no [FAIL] contains {needle!r}. Failures: {fails}",
         )
 
     def assertNoFails(self) -> None:
@@ -122,176 +123,176 @@ class HarnessCase(unittest.TestCase):
         self.assertEqual(fails, [])
 
 
-class TestEstadosNormales(HarnessCase):
-    def test_sin_specs_ni_features_solo_avisa(self) -> None:
+class TestNormalStates(HarnessCase):
+    def test_no_specs_no_features_only_warns(self) -> None:
         fails, warns = self.check()
         self.assertEqual(fails, [])
         self.assertTrue(warns)
 
-    def test_specs_sin_carpeta_solo_avisa(self) -> None:
+    def test_a_missing_specs_folder_only_warns(self) -> None:
         os.rmdir(os.path.join(self.root, "specs"))
         fails, warns = self.check()
         self.assertEqual(fails, [])
-        self.assertTrue(any("todavía no existe specs/" in w for w in warns))
+        self.assertTrue(any("specs/ does not exist" in w for w in warns))
 
-    def test_draft_con_features_draft_es_valido(self) -> None:
+    def test_draft_with_draft_features_is_valid(self) -> None:
         self.write_spec()
         self.write_features([feature()])
         fails, warns = self.check()
         self.assertEqual(fails, [])
-        self.assertTrue(any("esperando tu OK" in w for w in warns))
+        self.assertTrue(any("waiting for your OK" in w for w in warns))
 
-    def test_aprobado_con_features_pending_es_valido_y_sin_avisos(self) -> None:
-        self.write_spec(estado="aprobado", aprobado_el="2026-09-10")
+    def test_approved_with_pending_features_is_valid_and_silent(self) -> None:
+        self.write_spec(status="approved", approved_on="2026-09-10")
         self.write_features([feature(status="pending")])
         fails, warns = self.check()
         self.assertEqual(fails, [])
         self.assertEqual(warns, [])
 
-    def test_varias_features_por_requisito(self) -> None:
-        self.write_spec(estado="aprobado", aprobado_el="2026-09-10")
+    def test_several_features_per_requirement(self) -> None:
+        self.write_spec(status="approved", approved_on="2026-09-10")
         self.write_features(
             [
-                feature(id=1, name="una", status="pending"),
-                feature(id=2, name="otra", status="pending"),
+                feature(id=1, name="one", status="pending"),
+                feature(id=2, name="another", status="pending"),
             ]
         )
         self.assertNoFails()
 
-    def test_plantilla_con_placeholders_se_ignora(self) -> None:
-        self.write_spec(name="_plantilla_req.md", body="---\nid: <REQ-00N>\n")
+    def test_the_template_with_placeholders_is_ignored(self) -> None:
+        self.write_spec(name="_req_template.md", body="---\nid: <REQ-00N>\n")
         self.assertNoFails()
 
 
-class TestElGate(HarnessCase):
-    def test_feature_en_progreso_sobre_draft_falla(self) -> None:
+class TestTheGate(HarnessCase):
+    def test_a_feature_in_progress_over_a_draft_fails(self) -> None:
         self.write_spec()
         self.write_features([feature(status="in_progress")])
-        self.assertFailsWith("sigue en estado \"draft\"")
+        self.assertFailsWith("is still \"draft\"")
 
-    def test_feature_blocked_sobre_draft_tambien_falla(self) -> None:
+    def test_a_blocked_feature_over_a_draft_also_fails(self) -> None:
         self.write_spec()
         self.write_features([feature(status="blocked")])
-        self.assertFailsWith("nadie aprobó ese requisito")
+        self.assertFailsWith("nobody approved that requirement")
 
-    def test_codigo_en_src_sin_requisito_aprobado_falla(self) -> None:
+    def test_code_in_src_with_no_approved_requirement_fails(self) -> None:
         self.write_spec()
         self.write_features([feature()])
         self.write_module()
-        self.assertFailsWith("antes de definir qué había que hacer")
+        self.assertFailsWith("before deciding what to build")
 
-    def test_codigo_en_src_con_requisito_aprobado_es_valido(self) -> None:
-        self.write_spec(estado="aprobado", aprobado_el="2026-09-10")
+    def test_code_in_src_with_an_approved_requirement_is_valid(self) -> None:
+        self.write_spec(status="approved", approved_on="2026-09-10")
         self.write_features([feature(status="done")])
         self.write_module()
         self.assertNoFails()
 
 
-class TestTrazabilidad(HarnessCase):
-    def test_feature_sin_campo_spec_falla(self) -> None:
-        sin_spec = feature()
-        del sin_spec["spec"]
-        self.write_features([sin_spec])
-        self.assertFailsWith("no tiene campo \"spec\"")
+class TestTraceability(HarnessCase):
+    def test_a_feature_without_the_spec_field_fails(self) -> None:
+        without_spec = feature()
+        del without_spec["spec"]
+        self.write_features([without_spec])
+        self.assertFailsWith("has no \"spec\" field")
 
-    def test_puntero_colgante_falla(self) -> None:
+    def test_a_dangling_pointer_fails(self) -> None:
         self.write_features([feature()])
-        self.assertFailsWith("que no existe")
+        self.assertFailsWith("which does not exist")
 
-    def test_puntero_con_formato_invalido_falla(self) -> None:
-        self.write_features([feature(spec="docs/otra_cosa.md")])
-        self.assertFailsWith("debe ser una ruta specs/REQ-00N_nombre.md")
+    def test_a_badly_formatted_pointer_fails(self) -> None:
+        self.write_features([feature(spec="docs/something_else.md")])
+        self.assertFailsWith("must be a specs/REQ-00N_name.md path")
 
-    def test_aprobado_sin_features_falla(self) -> None:
-        self.write_spec(estado="aprobado", aprobado_el="2026-09-10")
-        self.assertFailsWith("ninguna feature lo referencia")
+    def test_approved_with_no_features_fails(self) -> None:
+        self.write_spec(status="approved", approved_on="2026-09-10")
+        self.assertFailsWith("no feature references it")
 
-    def test_aprobado_con_features_draft_solo_avisa(self) -> None:
-        self.write_spec(estado="aprobado", aprobado_el="2026-09-10")
+    def test_approved_with_draft_features_only_warns(self) -> None:
+        self.write_spec(status="approved", approved_on="2026-09-10")
         self.write_features([feature(status="draft")])
         fails, warns = self.check()
         self.assertEqual(fails, [])
-        self.assertTrue(any("aprobación a medias" in w for w in warns))
+        self.assertTrue(any("half-finished approval" in w for w in warns))
 
 
-class TestFormatoDelSpec(HarnessCase):
-    def test_nombre_de_archivo_invalido_falla(self) -> None:
-        self.write_spec(name="REQ-001 Mal Nombre.md")
-        self.assertFailsWith("no sigue el formato")
+class TestSpecFormat(HarnessCase):
+    def test_an_invalid_file_name_fails(self) -> None:
+        self.write_spec(name="REQ-001 Bad Name.md")
+        self.assertFailsWith("does not follow")
 
-    def test_sin_frontmatter_falla(self) -> None:
-        self.write_spec(body="# Un requisito sin frontmatter\n")
-        self.assertFailsWith("no tiene frontmatter")
+    def test_no_front_matter_fails(self) -> None:
+        self.write_spec(body="# A requirement with no front matter\n")
+        self.assertFailsWith("has no front matter")
 
-    def test_frontmatter_sin_cerrar_falla(self) -> None:
-        self.write_spec(body="---\nid: REQ-001\ntitulo: x\n")
-        self.assertFailsWith("no tiene frontmatter")
+    def test_unterminated_front_matter_fails(self) -> None:
+        self.write_spec(body="---\nid: REQ-001\ntitle: x\n")
+        self.assertFailsWith("has no front matter")
 
-    def test_falta_una_clave_obligatoria(self) -> None:
-        self.write_spec(body="---\nid: REQ-001\ntitulo: x\nprioridad: alta\n---\n")
-        self.assertFailsWith("falta en el frontmatter: estado")
+    def test_a_required_key_is_missing(self) -> None:
+        self.write_spec(body="---\nid: REQ-001\ntitle: x\npriority: high\n---\n")
+        self.assertFailsWith("missing from the front matter: status")
 
-    def test_estado_invalido_falla(self) -> None:
-        self.write_spec(estado="listo")
-        self.assertFailsWith("estado inválido")
+    def test_an_invalid_status_fails(self) -> None:
+        self.write_spec(status="ready")
+        self.assertFailsWith("invalid status")
 
-    def test_prioridad_invalida_falla(self) -> None:
-        self.write_spec(prioridad="urgentisima")
-        self.assertFailsWith("prioridad inválida")
+    def test_an_invalid_priority_fails(self) -> None:
+        self.write_spec(priority="super_urgent")
+        self.assertFailsWith("invalid priority")
 
-    def test_id_que_no_coincide_con_el_archivo_falla(self) -> None:
+    def test_an_id_that_does_not_match_the_file_fails(self) -> None:
         self.write_spec(spec_id="REQ-002")
-        self.assertFailsWith("no coincide con el")
+        self.assertFailsWith("does not match the one in")
 
-    def test_id_duplicado_falla(self) -> None:
+    def test_a_duplicate_id_fails(self) -> None:
         self.write_spec()
-        self.write_spec(name="REQ-001_otro_nombre.md")
-        self.assertFailsWith("duplicado")
+        self.write_spec(name="REQ-001_another_name.md")
+        self.assertFailsWith("duplicate")
 
-    def test_aprobado_sin_fecha_falla(self) -> None:
-        self.write_spec(estado="aprobado")
+    def test_approved_with_no_date_fails(self) -> None:
+        self.write_spec(status="approved")
         self.write_features([feature(status="pending")])
-        self.assertFailsWith("le falta la fecha en aprobado_el")
+        self.assertFailsWith("has no date in approved_on")
 
-    def test_aprobado_con_preguntas_abiertas_falla(self) -> None:
+    def test_approved_with_open_questions_fails(self) -> None:
         self.write_spec(
-            estado="aprobado",
-            aprobado_el="2026-09-10",
-            preguntas="- [ ] **P1:** ¿esto cómo era?",
+            status="approved",
+            approved_on="2026-09-10",
+            questions="- [ ] **Q1:** how was this again?",
         )
         self.write_features([feature(status="pending")])
-        self.assertFailsWith("pregunta(s) abierta(s) sin responder")
+        self.assertFailsWith("unanswered open question")
 
 
-class TestPrioridad(HarnessCase):
-    def test_feature_puede_bajar_la_prioridad(self) -> None:
-        self.write_spec(estado="aprobado", prioridad="alta", aprobado_el="2026-09-10")
-        self.write_features([feature(status="pending", prioridad="baja")])
+class TestPriority(HarnessCase):
+    def test_a_feature_may_lower_the_priority(self) -> None:
+        self.write_spec(status="approved", priority="high", approved_on="2026-09-10")
+        self.write_features([feature(status="pending", priority="low")])
         self.assertNoFails()
 
-    def test_feature_no_puede_subir_la_prioridad(self) -> None:
-        self.write_spec(estado="aprobado", prioridad="media", aprobado_el="2026-09-10")
-        self.write_features([feature(status="pending", prioridad="critica")])
-        self.assertFailsWith("es más alta que la de su requisito")
+    def test_a_feature_may_not_raise_the_priority(self) -> None:
+        self.write_spec(status="approved", priority="medium", approved_on="2026-09-10")
+        self.write_features([feature(status="pending", priority="critical")])
+        self.assertFailsWith("is higher than its")
 
-    def test_avisa_del_adelantamiento(self) -> None:
-        self.write_spec(estado="aprobado", prioridad="critica", aprobado_el="2026-09-10")
+    def test_it_warns_about_the_overtake(self) -> None:
+        self.write_spec(status="approved", priority="critical", approved_on="2026-09-10")
         self.write_features(
             [
-                feature(id=1, name="en_curso", status="in_progress", prioridad="media"),
-                feature(id=2, name="urgente", status="pending", prioridad="critica"),
+                feature(id=1, name="in_flight", status="in_progress", priority="medium"),
+                feature(id=2, name="urgent", status="pending", priority="critical"),
             ]
         )
         fails, warns = self.check()
         self.assertEqual(fails, [])
-        self.assertTrue(any("más prioridad encolado" in w for w in warns))
+        self.assertTrue(any("higher-priority work queued" in w for w in warns))
 
-    def test_no_avisa_si_lo_encolado_es_menos_urgente(self) -> None:
-        self.write_spec(estado="aprobado", prioridad="critica", aprobado_el="2026-09-10")
+    def test_no_warning_when_the_queued_work_is_less_urgent(self) -> None:
+        self.write_spec(status="approved", priority="critical", approved_on="2026-09-10")
         self.write_features(
             [
-                feature(id=1, name="en_curso", status="in_progress", prioridad="critica"),
-                feature(id=2, name="despues", status="pending", prioridad="baja"),
+                feature(id=1, name="in_flight", status="in_progress", priority="critical"),
+                feature(id=2, name="later", status="pending", priority="low"),
             ]
         )
         fails, warns = self.check()
@@ -299,162 +300,162 @@ class TestPrioridad(HarnessCase):
         self.assertEqual(warns, [])
 
 
-class TestEscenariosAdversarios(HarnessCase):
-    """Los intentos de saltarse el gate que encontró la auditoría.
+class TestAdversarialScenarios(HarnessCase):
+    """The attempts to slip past the gate that the audit found.
 
-    Todos estos pasaban antes. Están aquí para que no vuelvan.
+    All of these used to pass. They are here so they do not come back.
     """
 
-    def test_un_estado_inventado_no_escapa_del_gate(self) -> None:
-        # Ampliando rules.valid_status se podía inventar un estado que ningún
-        # validador miraba. Ahora todo lo que no es draft cuenta como trabajo.
+    def test_an_invented_status_does_not_escape_the_gate(self) -> None:
+        # Widening rules.valid_status let you invent a status no validator
+        # looked at. Now anything that is not draft counts as work.
         self.write_spec()
-        self.write_features([feature(status="listo")])
-        self.assertFailsWith("nadie aprobó ese requisito")
+        self.write_features([feature(status="ready")])
+        self.assertFailsWith("nobody approved that requirement")
 
-    def test_codigo_en_subcarpeta_de_src_tambien_cuenta(self) -> None:
+    def test_code_in_a_src_subfolder_counts_too(self) -> None:
         self.write_spec()
         self.write_features([feature()])
-        os.makedirs(os.path.join(self.root, "src", "paquete"))
-        with open(os.path.join(self.root, "src", "paquete", "mod.py"), "w") as handle:
+        os.makedirs(os.path.join(self.root, "src", "package"))
+        with open(os.path.join(self.root, "src", "package", "mod.py"), "w") as handle:
             handle.write("x = 1\n")
-        self.assertFailsWith("antes de definir qué había que hacer")
+        self.assertFailsWith("before deciding what to build")
 
-    def test_codigo_que_no_es_python_tambien_cuenta(self) -> None:
+    def test_code_that_is_not_python_counts_too(self) -> None:
         self.write_spec()
         self.write_features([feature()])
         with open(os.path.join(self.root, "src", "app.ts"), "w") as handle:
             handle.write("const x = 1\n")
-        self.assertFailsWith("antes de definir qué había que hacer")
+        self.assertFailsWith("before deciding what to build")
 
-    def test_fecha_de_aprobacion_tiene_que_ser_una_fecha(self) -> None:
-        self.write_spec(estado="aprobado", aprobado_el="cuando sea")
+    def test_the_approval_date_has_to_be_a_date(self) -> None:
+        self.write_spec(status="approved", approved_on="whenever")
         self.write_features([feature(status="pending")])
-        self.assertFailsWith("tiene que ser una fecha")
+        self.assertFailsWith("has to be a YYYY-MM-DD")
 
-    def test_checkbox_dentro_de_un_bloque_de_codigo_no_bloquea(self) -> None:
+    def test_a_checkbox_inside_a_fenced_block_does_not_block(self) -> None:
         self.write_spec(
-            estado="aprobado",
-            aprobado_el="2026-09-10",
-            preguntas="```\n- [ ] ejemplo de la plantilla\n```",
+            status="approved",
+            approved_on="2026-09-10",
+            questions="```\n- [ ] example from the template\n```",
         )
         self.write_features([feature(status="pending")])
         self.assertNoFails()
 
-    def test_checkbox_con_otra_grafia_igual_bloquea(self) -> None:
-        for grafia in ("- [  ] P1", "* [ ] P1", "+ [] P1"):
-            with self.subTest(grafia=grafia):
+    def test_a_checkbox_in_another_spelling_still_blocks(self) -> None:
+        for spelling in ("- [  ] Q1", "* [ ] Q1", "+ [] Q1"):
+            with self.subTest(spelling=spelling):
                 self.write_spec(
-                    estado="aprobado", aprobado_el="2026-09-10", preguntas=grafia
+                    status="approved", approved_on="2026-09-10", questions=spelling
                 )
                 self.write_features([feature(status="pending")])
-                self.assertFailsWith("pregunta(s) abierta(s) sin responder")
+                self.assertFailsWith("unanswered open question")
 
-    def test_frontmatter_con_claves_repetidas_falla(self) -> None:
+    def test_front_matter_with_repeated_keys_fails(self) -> None:
         self.write_spec(
             body=(
-                "---\nid: REQ-001\ntitulo: T\nestado: draft\n"
-                "estado: aprobado\nprioridad: alta\n---\n"
+                "---\nid: REQ-001\ntitle: T\nstatus: draft\n"
+                "status: approved\npriority: high\n---\n"
             )
         )
-        self.assertFailsWith("el frontmatter repite")
+        self.assertFailsWith("repeats")
 
-    def test_spec_descartado_con_features_draft_avisa(self) -> None:
-        self.write_spec(estado="descartado")
+    def test_a_discarded_spec_with_draft_features_warns(self) -> None:
+        self.write_spec(status="discarded")
         self.write_features([feature(status="draft")])
         fails, warns = self.check()
         self.assertEqual(fails, [])
-        self.assertTrue(any("está descartado" in w for w in warns), warns)
+        self.assertTrue(any("is discarded" in w for w in warns), warns)
 
-    def test_spec_descartado_con_feature_viva_falla(self) -> None:
-        self.write_spec(estado="descartado")
+    def test_a_discarded_spec_with_a_live_feature_fails(self) -> None:
+        self.write_spec(status="discarded")
         self.write_features([feature(status="in_progress")])
-        self.assertFailsWith("nadie aprobó ese requisito")
+        self.assertFailsWith("nobody approved that requirement")
 
-    def test_feature_list_ilegible_no_calla_lo_de_specs(self) -> None:
-        self.write_spec(name="REQ-001 Mal Nombre.md")
+    def test_an_unreadable_feature_list_does_not_silence_specs(self) -> None:
+        self.write_spec(name="REQ-001 Bad Name.md")
         with open(os.path.join(self.root, "feature_list.json"), "w") as handle:
-            handle.write("{ esto no es json")
+            handle.write("{ this is not json")
         fails, _ = self.check()
-        self.assertTrue(any("no sigue el formato" in f for f in fails), fails)
+        self.assertTrue(any("does not follow" in f for f in fails), fails)
         self.assertTrue(any("feature_list.json" in f for f in fails), fails)
 
-    def test_id_que_no_coincide_no_se_carga(self) -> None:
-        # Antes se reportaba el fallo pero el spec se seguía usando para
-        # trazabilidad, lo que daba diagnósticos contradictorios.
+    def test_a_mismatched_id_is_not_loaded(self) -> None:
+        # It used to report the failure but keep using the spec for
+        # traceability, which produced contradictory diagnostics.
         self.write_spec(spec_id="REQ-002")
         self.write_features([feature()])
         fails, _ = self.check()
-        self.assertTrue(any("no coincide" in f for f in fails), fails)
-        self.assertTrue(any("que no existe" in f for f in fails), fails)
+        self.assertTrue(any("does not match" in f for f in fails), fails)
+        self.assertTrue(any("does not exist" in f for f in fails), fails)
 
 
-class TestHuellaDeLoAprobado(HarnessCase):
-    """Aprobar tiene que significar "aprobé *esto*", no "escribí la palabra"."""
+class TestFingerprintOfWhatWasApproved(HarnessCase):
+    """Approving has to mean "I approved *this*", not "I typed the word"."""
 
-    def test_editar_un_spec_aprobado_se_detecta(self) -> None:
-        self.write_spec(estado="aprobado", aprobado_el="2026-09-10")
+    def test_editing_an_approved_spec_is_detected(self) -> None:
+        self.write_spec(status="approved", approved_on="2026-09-10")
         self.write_features([feature(status="pending")])
         self.assertNoFails()
 
-        ruta = os.path.join(self.root, "specs", "REQ-001_un_requisito.md")
-        with open(ruta, encoding="utf-8") as handle:
-            contenido = handle.read()
-        with open(ruta, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(contenido + "\n## 5. Criterios\n\n1. Y además, borrar todo.\n")
+        path = os.path.join(self.root, "specs", "REQ-001_a_requirement.md")
+        with open(path, encoding="utf-8") as handle:
+            content = handle.read()
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(content + "\n## 5. Criteria\n\n1. And also, delete everything.\n")
 
-        self.assertFailsWith("cambió DESPUÉS de aprobarse")
+        self.assertFailsWith("changed AFTER being approved")
 
-    def test_aprobado_sin_huella_falla(self) -> None:
+    def test_approved_without_a_fingerprint_fails(self) -> None:
         self.write_spec(
             body=(
-                "---\nid: REQ-001\ntitulo: T\nestado: aprobado\n"
-                "prioridad: alta\naprobado_el: 2026-09-10\n---\n# REQ-001\n"
+                "---\nid: REQ-001\ntitle: T\nstatus: approved\n"
+                "priority: high\napproved_on: 2026-09-10\n---\n# REQ-001\n"
             )
         )
         self.write_features([feature(status="pending")])
-        self.assertFailsWith("no tiene aprobado_hash")
+        self.assertFailsWith("has no approved_hash")
 
-    def test_tocar_la_bitacora_no_invalida_la_aprobacion(self) -> None:
-        # §7 y §8 cambian legítimamente después de aprobar.
-        self.write_spec(estado="aprobado", aprobado_el="2026-09-10")
+    def test_touching_the_change_log_does_not_void_the_approval(self) -> None:
+        # §7 and §8 change legitimately after approval.
+        self.write_spec(status="approved", approved_on="2026-09-10")
         self.write_features([feature(status="pending")])
-        ruta = os.path.join(self.root, "specs", "REQ-001_un_requisito.md")
-        with open(ruta, "a", encoding="utf-8", newline="\n") as handle:
-            handle.write("\n## 8. Bitácora\n\n| 2 | 2026-09-11 | se derivó otra feature |\n")
+        path = os.path.join(self.root, "specs", "REQ-001_a_requirement.md")
+        with open(path, "a", encoding="utf-8", newline="\n") as handle:
+            handle.write("\n## 8. Change log\n\n| 2 | 2026-09-11 | another feature derived |\n")
         self.assertNoFails()
 
-    def test_la_huella_ignora_el_frontmatter(self) -> None:
-        cuerpo = "# T\n\n## 3. Alcance\n\nBuscar notas.\n"
-        uno = vr.huella_del_spec("---\nid: REQ-001\nestado: draft\n---\n" + cuerpo)
-        dos = vr.huella_del_spec("---\nid: REQ-001\nestado: aprobado\nronda: 9\n---\n" + cuerpo)
-        self.assertEqual(uno, dos)
+    def test_the_fingerprint_ignores_the_front_matter(self) -> None:
+        body = "# T\n\n## 3. Scope\n\nSearch notes.\n"
+        one = vr.spec_fingerprint("---\nid: REQ-001\nstatus: draft\n---\n" + body)
+        two = vr.spec_fingerprint("---\nid: REQ-001\nstatus: approved\nround: 9\n---\n" + body)
+        self.assertEqual(one, two)
 
-    def test_la_huella_ignora_espacios_al_final_de_linea(self) -> None:
-        uno = vr.huella_del_spec("---\na: b\n---\n## 3. Alcance\n\nAlgo.\n")
-        dos = vr.huella_del_spec("---\na: b\n---\n## 3. Alcance   \n\nAlgo.  \n")
-        self.assertEqual(uno, dos)
+    def test_the_fingerprint_ignores_trailing_whitespace(self) -> None:
+        one = vr.spec_fingerprint("---\na: b\n---\n## 3. Scope\n\nSomething.\n")
+        two = vr.spec_fingerprint("---\na: b\n---\n## 3. Scope   \n\nSomething.  \n")
+        self.assertEqual(one, two)
 
 
-class TestParserDeFrontmatter(unittest.TestCase):
-    def test_quita_comillas(self) -> None:
-        fields, repetidas = vr.parse_frontmatter("---\ntitulo: \"Con comillas\"\n---\n")
-        self.assertEqual(fields, {"titulo": "Con comillas"})
-        self.assertEqual(repetidas, [])
+class TestFrontMatterParser(unittest.TestCase):
+    def test_it_strips_quotes(self) -> None:
+        fields, repeated = vr.parse_frontmatter("---\ntitle: \"Quoted\"\n---\n")
+        self.assertEqual(fields, {"title": "Quoted"})
+        self.assertEqual(repeated, [])
 
-    def test_no_trunca_un_titulo_con_almohadilla(self) -> None:
-        fields, _ = vr.parse_frontmatter("---\ntitulo: Arregla el bug #123\n---\n")
-        self.assertEqual(fields["titulo"], "Arregla el bug #123")
+    def test_it_does_not_truncate_a_title_with_a_hash(self) -> None:
+        fields, _ = vr.parse_frontmatter("---\ntitle: Fix bug #123\n---\n")
+        self.assertEqual(fields["title"], "Fix bug #123")
 
-    def test_reporta_claves_repetidas(self) -> None:
-        fields, repetidas = vr.parse_frontmatter(
-            "---\nestado: draft\nestado: aprobado\n---\n"
+    def test_it_reports_repeated_keys(self) -> None:
+        fields, repeated = vr.parse_frontmatter(
+            "---\nstatus: draft\nstatus: approved\n---\n"
         )
-        self.assertEqual(fields["estado"], "draft")
-        self.assertEqual(repetidas, ["estado"])
+        self.assertEqual(fields["status"], "draft")
+        self.assertEqual(repeated, ["status"])
 
-    def test_sin_apertura_devuelve_none(self) -> None:
-        self.assertIsNone(vr.parse_frontmatter("# Solo un título\n"))
+    def test_no_opening_delimiter_returns_none(self) -> None:
+        self.assertIsNone(vr.parse_frontmatter("# Just a heading\n"))
 
 
 if __name__ == "__main__":

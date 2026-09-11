@@ -1,41 +1,42 @@
-"""Los hooks del arnés, en un solo módulo y en las dos plataformas.
+"""The harness hooks, in one module and on both platforms.
 
-Propósito
-    Claude Code ejecuta estos hooks; no los ejecuta el agente, así que no los
-    puede omitir. Pero para que un hook **bloquee** hay que salir con exit 2 y
-    escribir el motivo por stderr: con exit 1 Claude Code muestra el error y
-    sigue como si nada. Los hooks del arnés salían con 1, así que en la
-    práctica no bloqueaban nada — la sesión cerraba con el verificador en rojo.
+Purpose
+    Claude Code runs these hooks; the agent does not, so it cannot skip them.
+    But for a hook to **block**, it has to exit with code 2 and write the reason
+    to stderr: with exit 1 Claude Code shows the error and carries on as if
+    nothing happened. The harness hooks used to exit 1, so in practice they
+    blocked nothing — the session closed with the verifier red.
 
-    Este módulo existe además para que los hooks funcionen igual en Windows y
-    en POSIX. Antes eran PowerShell puro y en WSL o Linux fallaban en cada
-    edición.
+    This module also exists so the hooks work the same on Windows and on POSIX.
+    They used to be pure PowerShell and under WSL or Linux they failed on every
+    single edit.
 
-Eventos
-    stop          Antes de cerrar el turno: corre el verificador entero. Si
-                  está en rojo, bloquea (exit 2) y le dice al agente qué falta.
-    post-edit     Tras cada Edit/Write: corre los tests. Si están rotos, bloquea.
-    pre-tool-use  ANTES de escribir: protege la capa que verifica. Es el único
-                  momento en que se puede impedir una escritura, porque los
-                  otros dos hooks llegan cuando ya ocurrió.
+Events
+    stop          Before closing the turn: runs the whole verifier. If it is red,
+                  it blocks (exit 2) and tells the agent what is missing.
+    post-edit     After every Edit/Write: runs the tests. If they are broken, it
+                  blocks.
+    pre-tool-use  BEFORE writing: protects the layer that does the verifying. It
+                  is the only moment a write can be prevented, because the other
+                  two hooks arrive once it already happened.
 
-Uso
+Usage
     python scripts/harness_hook.py stop
     python scripts/harness_hook.py post-edit [--tests-dir tests]
     python scripts/harness_hook.py pre-tool-use
 
-    Los invoca `.claude/settings.json`. A mano sirven para probarlos.
+    `.claude/settings.json` invokes them. By hand they are useful for testing.
 
 Exit codes
-    0  todo en orden (o no hay nada que verificar todavía)
-    2  bloquea: el motivo va por stderr, que es el canal que Claude Code le
-       devuelve al modelo
+    0  all good (or there is nothing to verify yet)
+    2  blocks: the reason goes to stderr, which is the channel Claude Code feeds
+       back to the model
 
-Nota sobre el bucle
-    Claude Code vuelve a llamar al hook `stop` después de que el agente
-    reacciona. Si el hook bloqueara siempre, la sesión no cerraría nunca: por
-    eso se respeta `stop_hook_active` del JSON de entrada, que avisa de que ya
-    venimos de un bloqueo. `stop` tampoco se dispara si interrumpes con Ctrl+C.
+A note about the loop
+    Claude Code calls the `stop` hook again after the agent reacts. If the hook
+    always blocked, the session could never close: hence `stop_hook_active` from
+    the input JSON, which says we are already coming from a block. `stop` also
+    does not fire if you interrupt with Ctrl+C.
 """
 from __future__ import annotations
 
@@ -48,35 +49,35 @@ import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-BLOQUEA = 2
-PASA = 0
+BLOCK = 2
+PASS = 0
 
 
-def _bloquear(mensaje: str) -> int:
-    """El motivo va por stderr: es lo que Claude Code le devuelve al modelo."""
-    print(mensaje, file=sys.stderr)
-    return BLOQUEA
+def _block(message: str) -> int:
+    """The reason goes to stderr: that is what Claude Code feeds back to the model."""
+    print(message, file=sys.stderr)
+    return BLOCK
 
 
-def _entrada_del_hook() -> dict:
-    """El JSON que Claude Code pasa por stdin. Vacío si se ejecuta a mano."""
+def _hook_input() -> dict:
+    """The JSON Claude Code passes on stdin. Empty when run by hand."""
     if sys.stdin is None or sys.stdin.isatty():
         return {}
     try:
-        crudo = sys.stdin.read()
+        raw = sys.stdin.read()
     except (OSError, ValueError):
         return {}
-    if not crudo.strip():
+    if not raw.strip():
         return {}
     try:
-        datos = json.loads(crudo)
+        data = json.loads(raw)
     except json.JSONDecodeError:
         return {}
-    return datos if isinstance(datos, dict) else {}
+    return data if isinstance(data, dict) else {}
 
 
-def comando_del_verificador() -> list[str]:
-    """El verificador de esta plataforma. Son el mismo, en dos dialectos."""
+def verifier_command() -> list[str]:
+    """This platform's verifier. They are the same one, in two dialects."""
     if os.name == "nt":
         return [
             "powershell",
@@ -90,15 +91,16 @@ def comando_del_verificador() -> list[str]:
     return ["./init.sh", "--quiet"]
 
 
-def evento_stop() -> int:
-    entrada = _entrada_del_hook()
-    if entrada.get("stop_hook_active"):
-        # Ya venimos de un bloqueo: insistir dejaría la sesión sin poder cerrar.
-        return PASA
+def event_stop() -> int:
+    hook_input = _hook_input()
+    if hook_input.get("stop_hook_active"):
+        # We already come from a block: insisting would leave the session unable
+        # to close.
+        return PASS
 
     try:
-        resultado = subprocess.run(
-            comando_del_verificador(),
+        result = subprocess.run(
+            verifier_command(),
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
@@ -106,51 +108,50 @@ def evento_stop() -> int:
             errors="replace",
         )
     except OSError as exc:
-        return _bloquear(f"[harness] no se pudo ejecutar el verificador: {exc}")
+        return _block(f"[harness] could not run the verifier: {exc}")
 
-    if resultado.returncode == 0:
-        return PASA
+    if result.returncode == 0:
+        return PASS
 
-    lineas = [
-        linea
-        for linea in (resultado.stdout or "").splitlines()
-        if linea.startswith("[FAIL]")
+    lines = [
+        line
+        for line in (result.stdout or "").splitlines()
+        if line.startswith("[FAIL]")
     ]
-    detalle = "\n".join(lineas) or (resultado.stderr or "").strip()
-    return _bloquear(
-        "[harness] el verificador está en rojo y la sesión no se cierra así.\n"
-        f"{detalle}\n"
-        "Resuélvelo y vuelve a intentarlo, o deja constancia del bloqueo en "
-        "progress/current.md."
+    detail = "\n".join(lines) or (result.stderr or "").strip()
+    return _block(
+        "[harness] the verifier is red and the session does not close like this.\n"
+        f"{detail}\n"
+        "Sort it out and try again, or record the blocker in progress/current.md."
     )
 
 
-def _contar_tests(tests_dir: str) -> int | None:
-    """Cuántos tests hay. None si no se pudieron descubrir."""
+def _count_tests(tests_dir: str) -> int | None:
+    """How many tests there are. None if they could not be discovered."""
     try:
         suite = unittest.TestLoader().discover(tests_dir)
-    except Exception:  # noqa: BLE001 — cualquier error de import cuenta igual
+    except Exception:  # noqa: BLE001 — any import error counts the same
         return None
     return suite.countTestCases()
 
 
-def evento_post_edit(tests_dir: str) -> int:
-    ruta = os.path.join(REPO_ROOT, tests_dir)
-    if not os.path.isdir(ruta):
-        print(f"[harness] no existe {tests_dir}/ — nada que ejecutar")
-        return PASA
+def event_post_edit(tests_dir: str) -> int:
+    path = os.path.join(REPO_ROOT, tests_dir)
+    if not os.path.isdir(path):
+        print(f"[harness] {tests_dir}/ does not exist — nothing to run")
+        return PASS
 
-    total = _contar_tests(ruta)
+    total = _count_tests(path)
     if total is None:
-        return _bloquear(
-            f"[harness] no se pudieron descubrir los tests de {tests_dir}/: "
-            f"hay un error de import. Arréglalo antes de seguir editando."
+        return _block(
+            f"[harness] could not discover the tests in {tests_dir}/: there is an "
+            f"import error. Fix it before editing anything else."
         )
     if total == 0:
-        print(f"[harness] 0 tests en {tests_dir}/ — todavía no se verifica nada")
-        return PASA
+        print(f"[harness] 0 tests in {tests_dir}/ — nothing is being verified yet")
+        return PASS
 
-    resultado = subprocess.run(
+    result = subprocess.run(
         [sys.executable, "-m", "unittest", "discover", "-s", tests_dir, "-q"],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -158,134 +159,135 @@ def evento_post_edit(tests_dir: str) -> int:
         encoding="utf-8",
         errors="replace",
     )
-    if resultado.returncode == 0:
-        print(f"[harness] {total} tests en verde")
-        return PASA
+    if result.returncode == 0:
+        print(f"[harness] {total} tests green")
+        return PASS
 
-    salida = ((resultado.stdout or "") + (resultado.stderr or "")).strip()
-    return _bloquear(
-        f"[harness] tests ROTOS tras tu edición — arréglalos antes de seguir.\n{salida}"
+    output = ((result.stdout or "") + (result.stderr or "")).strip()
+    return _block(
+        f"[harness] tests BROKEN after your edit — fix them before going on.\n{output}"
     )
 
 
-# --- pre-tool-use: la capa que verifica no se edita mientras se trabaja -----
+# --- pre-tool-use: the layer that verifies is not edited mid-session ---------
 
-# Los archivos que deciden si el trabajo está bien hecho. Un agente que ve rojo
-# no arregla el rojo editando el validador, y esa tentación no se resuelve
-# pidiéndoselo por favor en un .md.
-ZONA_PROTEGIDA = (
+# The files that decide whether the work is any good. An agent that sees red
+# does not fix the red by editing the validator, and that temptation is not
+# resolved by asking nicely in a .md.
+PROTECTED_ZONE = (
     ".claude/",
     "scripts/",
     "schema/",
     "init.ps1",
     "init.sh",
     "bootstrap.ps1",
+    "bootstrap.sh",
     "AGENTS.md",
     "CLAUDE.md",
     "CHECKPOINTS.md",
 )
 
-MARCA_MANTENIMIENTO = ".harness-mantenimiento"
+MAINTENANCE_MARK = ".harness-maintenance"
 
-# Señales de escritura en una línea de shell. Es una heurística a propósito
-# corta: `Bash` puede escribir de mil formas y perseguirlas todas daría falsos
-# positivos constantes. Cubre las que aparecen de verdad.
-TOKENS_DE_ESCRITURA = (
+# Signs of a write in a shell line. A deliberately short heuristic: `Bash` can
+# write in a thousand ways and chasing all of them would mean constant false
+# positives. It covers the ones that actually show up.
+WRITE_TOKENS = (
     ">", ">>", "tee ", "rm ", "mv ", "cp ", "sed -i", "truncate ",
     "Set-Content", "Add-Content", "Out-File", "Remove-Item", "New-Item",
 )
 
-HERRAMIENTAS_DE_ESCRITURA = ("Write", "Edit", "MultiEdit", "NotebookEdit")
+WRITING_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
 
 
-def en_mantenimiento() -> bool:
-    """¿Estamos trabajando sobre el propio arnés, y a sabiendas?
+def in_maintenance() -> bool:
+    """Are we working on the harness itself, and on purpose?
 
-    La puerta existe porque la plantilla también se mantiene. Lo que cambia es
-    que abrirla es un acto deliberado y visible —un archivo que aparece en
-    `git status`— en vez de una edición silenciosa a mitad de una sesión de
-    desarrollo.
+    The door exists because the template gets maintained too. What changes is
+    that opening it is a deliberate, visible act — a file that shows up in
+    `git status` — instead of a silent edit in the middle of a development
+    session.
     """
-    if os.environ.get("HARNESS_MANTENIMIENTO"):
+    if os.environ.get("HARNESS_MAINTENANCE"):
         return True
-    return os.path.exists(os.path.join(REPO_ROOT, MARCA_MANTENIMIENTO))
+    return os.path.exists(os.path.join(REPO_ROOT, MAINTENANCE_MARK))
 
 
-def ruta_protegida(ruta: str) -> str | None:
-    """Devuelve el prefijo protegido que toca `ruta`, o None."""
-    if not ruta:
+def protected_path(path: str) -> str | None:
+    """Returns the protected prefix `path` touches, or None."""
+    if not path:
         return None
-    normal = ruta.replace("\\", "/")
-    # Una ruta relativa se resuelve contra la raíz del repositorio, no contra
-    # el cwd: el hook no controla desde dónde lo llaman.
-    absoluta = normal if os.path.isabs(normal) else os.path.join(REPO_ROOT, normal)
+    normalized = path.replace("\\", "/")
+    # A relative path resolves against the repository root, not the cwd: the
+    # hook does not control where it is called from.
+    absolute = normalized if os.path.isabs(normalized) else os.path.join(REPO_ROOT, normalized)
     try:
-        relativa = os.path.relpath(os.path.abspath(absoluta), REPO_ROOT).replace("\\", "/")
+        relative = os.path.relpath(os.path.abspath(absolute), REPO_ROOT).replace("\\", "/")
     except ValueError:
-        relativa = normal
-    if relativa.startswith(".."):
+        relative = normalized
+    if relative.startswith(".."):
         return None
-    for prefijo in ZONA_PROTEGIDA:
-        if relativa == prefijo or relativa.startswith(prefijo):
-            return prefijo
+    for prefix in PROTECTED_ZONE:
+        if relative == prefix or relative.startswith(prefix):
+            return prefix
     return None
 
 
-def _motivo(objetivo: str) -> str:
+def _reason(target: str) -> str:
     return (
-        f"[harness] {objetivo} es parte de la capa que verifica el trabajo, y no "
-        f"se toca durante una sesión de desarrollo: un agente que ve rojo no "
-        f"arregla el rojo editando el validador.\n"
-        f"Si de verdad estás manteniendo el arnés, dilo explícitamente creando "
-        f"el archivo {MARCA_MANTENIMIENTO} en la raíz (o exportando "
-        f"HARNESS_MANTENIMIENTO=1) y bórralo al terminar."
+        f"[harness] {target} is part of the layer that verifies the work, and it "
+        f"is not touched during a development session: an agent that sees red does "
+        f"not fix the red by editing the validator.\n"
+        f"If you really are maintaining the harness, say so explicitly by creating "
+        f"the {MAINTENANCE_MARK} file at the root (or exporting "
+        f"HARNESS_MAINTENANCE=1) and delete it when you are done."
     )
 
 
-def evento_pre_tool_use() -> int:
-    entrada = _entrada_del_hook()
-    herramienta = entrada.get("tool_name", "")
-    datos = entrada.get("tool_input") or {}
-    if not isinstance(datos, dict):
-        return PASA
+def event_pre_tool_use() -> int:
+    hook_input = _hook_input()
+    tool = hook_input.get("tool_name", "")
+    data = hook_input.get("tool_input") or {}
+    if not isinstance(data, dict):
+        return PASS
 
-    if en_mantenimiento():
-        return PASA
+    if in_maintenance():
+        return PASS
 
-    if herramienta in HERRAMIENTAS_DE_ESCRITURA:
-        prefijo = ruta_protegida(str(datos.get("file_path", "")))
-        return _bloquear(_motivo(prefijo)) if prefijo else PASA
+    if tool in WRITING_TOOLS:
+        prefix = protected_path(str(data.get("file_path", "")))
+        return _block(_reason(prefix)) if prefix else PASS
 
-    if herramienta in ("Bash", "PowerShell"):
-        comando = str(datos.get("command", ""))
-        if not any(token in comando for token in TOKENS_DE_ESCRITURA):
-            return PASA
-        for prefijo in ZONA_PROTEGIDA:
-            if prefijo in comando.replace("\\", "/"):
-                return _bloquear(
-                    _motivo(prefijo)
-                    + "\n(Detectado en un comando de shell: si solo estabas "
-                    "leyendo, reformúlalo sin operadores de escritura.)"
+    if tool in ("Bash", "PowerShell"):
+        command = str(data.get("command", ""))
+        if not any(token in command for token in WRITE_TOKENS):
+            return PASS
+        for prefix in PROTECTED_ZONE:
+            if prefix in command.replace("\\", "/"):
+                return _block(
+                    _reason(prefix)
+                    + "\n(Spotted in a shell command: if you were only reading, "
+                    "rephrase it without write operators.)"
                 )
 
-    return PASA
+    return PASS
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description="Hooks del arnés.")
-    parser.add_argument("evento", choices=("stop", "post-edit", "pre-tool-use"))
+    parser = argparse.ArgumentParser(description="Harness hooks.")
+    parser.add_argument("event", choices=("stop", "post-edit", "pre-tool-use"))
     parser.add_argument(
         "--tests-dir",
         default="tests",
-        help="Carpeta de tests para post-edit (por defecto: tests)",
+        help="Tests folder for post-edit (default: tests)",
     )
     args = parser.parse_args(argv[1:])
 
-    if args.evento == "stop":
-        return evento_stop()
-    if args.evento == "pre-tool-use":
-        return evento_pre_tool_use()
-    return evento_post_edit(args.tests_dir)
+    if args.event == "stop":
+        return event_stop()
+    if args.event == "pre-tool-use":
+        return event_pre_tool_use()
+    return event_post_edit(args.tests_dir)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
-"""Tests de scripts/validate_feature_list.py.
+"""Tests for scripts/validate_feature_list.py.
 
-Viven en `scripts/tests/` y no en `tests/` por la misma razón que sus vecinos:
-`tests/` es del proyecto, y el verificador lo descubre. Ver el encabezado de
-test_validate_requirements.py.
+They live in `scripts/tests/` and not in `tests/` for the same reason as their
+neighbours: `tests/` belongs to the project, and the verifier discovers it. See
+the header of test_validate_requirements.py.
 
     python -m unittest discover -s scripts/tests -v
 """
@@ -19,10 +19,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import validate_feature_list as vfl  # noqa: E402
 
 
-REGLAS_SANAS = {
+SANE_RULES = {
     "one_feature_at_a_time": True,
     "require_tests_to_close": True,
-    "orden_de_trabajo": "prioridad_luego_id",
+    "work_order": "priority_then_id",
     "valid_status": list(vfl.VALID_STATUS),
 }
 
@@ -30,12 +30,12 @@ REGLAS_SANAS = {
 def feature(**kwargs) -> dict:
     base = {
         "id": 1,
-        "name": "una_feature",
-        "title": "Una feature",
-        "description": "Qué hace.",
-        "spec": "specs/REQ-001_un_requisito.md",
-        "prioridad": "media",
-        "acceptance": ["hace algo verificable"],
+        "name": "a_feature",
+        "title": "A feature",
+        "description": "What it does.",
+        "spec": "specs/REQ-001_a_requirement.md",
+        "priority": "medium",
+        "acceptance": ["does something verifiable"],
         "status": "draft",
     }
     base.update(kwargs)
@@ -50,10 +50,10 @@ class FeatureListCase(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
-    def escribir(self, features: list, rules: dict | None = None) -> str:
+    def write(self, features: list, rules: dict | None = None) -> str:
         payload = {
-            "project": "prueba",
-            "rules": REGLAS_SANAS if rules is None else rules,
+            "project": "test",
+            "rules": SANE_RULES if rules is None else rules,
             "features": features,
         }
         path = os.path.join(self.root, "feature_list.json")
@@ -61,221 +61,221 @@ class FeatureListCase(unittest.TestCase):
             json.dump(payload, handle, ensure_ascii=False, indent=2)
         return path
 
-    def crear_test(self) -> None:
+    def create_test_file(self) -> None:
         os.makedirs(os.path.join(self.root, "tests"), exist_ok=True)
-        with open(os.path.join(self.root, "tests", "test_algo.py"), "w") as handle:
-            handle.write("# un test\n")
+        with open(os.path.join(self.root, "tests", "test_something.py"), "w") as handle:
+            handle.write("# a test\n")
 
-    def crear_informes(self, name: str = "una_feature", veredicto: str = "APPROVED") -> None:
+    def create_reports(self, name: str = "a_feature", verdict: str = "APPROVED") -> None:
         os.makedirs(os.path.join(self.root, "progress"), exist_ok=True)
         with open(os.path.join(self.root, "progress", f"impl_{name}.md"), "w") as handle:
-            handle.write("# informe del implementer\n")
+            handle.write("# implementer report\n")
         with open(os.path.join(self.root, "progress", f"review_{name}.md"), "w") as handle:
-            handle.write(f"# review\n\n**Veredicto:** {veredicto}\n")
+            handle.write(f"# review\n\n**Verdict:** {verdict}\n")
 
-    def cerrar_bien(self, name: str = "una_feature") -> None:
-        """Todo lo que el arnés exige para que una feature pueda estar `done`."""
-        self.crear_test()
-        self.crear_informes(name)
+    def close_properly(self, name: str = "a_feature") -> None:
+        """Everything the harness demands for a feature to be allowed in `done`."""
+        self.create_test_file()
+        self.create_reports(name)
 
-    def errores(self, features: list, rules: dict | None = None) -> list[str]:
-        return vfl.validate(self.escribir(features, rules))
+    def errors(self, features: list, rules: dict | None = None) -> list[str]:
+        return vfl.validate(self.write(features, rules))
 
-    def assertErrorCon(self, needle: str, features: list, rules: dict | None = None) -> None:
-        errs = self.errores(features, rules)
-        self.assertTrue(any(needle in e for e in errs), f"{needle!r} no está en {errs}")
+    def assertErrorWith(self, needle: str, features: list, rules: dict | None = None) -> None:
+        errs = self.errors(features, rules)
+        self.assertTrue(any(needle in e for e in errs), f"{needle!r} is not in {errs}")
 
 
-class TestCaminoFeliz(FeatureListCase):
-    def test_lista_vacia_es_valida(self) -> None:
-        self.assertEqual(self.errores([]), [])
+class TestHappyPath(FeatureListCase):
+    def test_an_empty_list_is_valid(self) -> None:
+        self.assertEqual(self.errors([]), [])
 
-    def test_una_feature_bien_formada(self) -> None:
-        self.assertEqual(self.errores([feature()]), [])
+    def test_a_well_formed_feature(self) -> None:
+        self.assertEqual(self.errors([feature()]), [])
 
-    def test_orden_de_trabajo_por_prioridad_y_luego_id(self) -> None:
+    def test_work_order_is_priority_then_id(self) -> None:
         features = [
-            feature(id=1, name="a", prioridad="critica", status="pending"),
-            feature(id=2, name="b", prioridad="alta", status="pending"),
-            feature(id=3, name="c", prioridad="critica", status="pending"),
-            feature(id=4, name="d", prioridad="baja", status="draft"),
+            feature(id=1, name="a", priority="critical", status="pending"),
+            feature(id=2, name="b", priority="high", status="pending"),
+            feature(id=3, name="c", priority="critical", status="pending"),
+            feature(id=4, name="d", priority="low", status="draft"),
         ]
-        cola = [f["id"] for f in vfl.orden_de_trabajo(features)]
-        self.assertEqual(cola, [1, 3, 2])
+        queue = [f["id"] for f in vfl.work_order(features)]
+        self.assertEqual(queue, [1, 3, 2])
 
 
-class TestReglasDelArnes(FeatureListCase):
-    """El JSON declara las reglas; no las decide."""
+class TestHarnessRules(FeatureListCase):
+    """The JSON declares the rules; it does not decide them."""
 
-    def test_no_se_puede_desactivar_una_feature_a_la_vez(self) -> None:
-        rules = dict(REGLAS_SANAS, one_feature_at_a_time=False)
-        self.assertErrorCon('"rules.one_feature_at_a_time"', [feature()], rules)
+    def test_one_feature_at_a_time_cannot_be_switched_off(self) -> None:
+        rules = dict(SANE_RULES, one_feature_at_a_time=False)
+        self.assertErrorWith('"rules.one_feature_at_a_time"', [feature()], rules)
 
-    def test_desactivarla_no_evita_el_error_de_dos_in_progress(self) -> None:
-        rules = dict(REGLAS_SANAS, one_feature_at_a_time=False)
-        errs = self.errores(
+    def test_switching_it_off_does_not_avoid_the_two_in_progress_error(self) -> None:
+        rules = dict(SANE_RULES, one_feature_at_a_time=False)
+        errs = self.errors(
             [
                 feature(id=1, name="a", status="in_progress"),
                 feature(id=2, name="b", status="in_progress"),
             ],
             rules,
         )
-        self.assertTrue(any("in_progress (máximo 1)" in e for e in errs), errs)
+        self.assertTrue(any("in_progress (max 1)" in e for e in errs), errs)
 
-    def test_no_se_pueden_inventar_estados(self) -> None:
-        rules = dict(REGLAS_SANAS, valid_status=list(vfl.VALID_STATUS) + ["listo"])
-        self.assertErrorCon('"rules.valid_status"', [feature()], rules)
+    def test_statuses_cannot_be_invented(self) -> None:
+        rules = dict(SANE_RULES, valid_status=list(vfl.VALID_STATUS) + ["ready"])
+        self.assertErrorWith('"rules.valid_status"', [feature()], rules)
 
-    def test_un_estado_inventado_sigue_siendo_invalido(self) -> None:
-        rules = dict(REGLAS_SANAS, valid_status=list(vfl.VALID_STATUS) + ["listo"])
-        self.assertErrorCon('estado inválido "listo"', [feature(status="listo")], rules)
+    def test_an_invented_status_is_still_invalid(self) -> None:
+        rules = dict(SANE_RULES, valid_status=list(vfl.VALID_STATUS) + ["ready"])
+        self.assertErrorWith('invalid status "ready"', [feature(status="ready")], rules)
 
-    def test_rules_que_no_es_objeto(self) -> None:
-        self.assertErrorCon('"rules" debe ser un objeto', [], "una cadena")
+    def test_rules_that_is_not_an_object(self) -> None:
+        self.assertErrorWith('"rules" must be an object', [], "a string")
 
-    def test_require_tests_to_close_no_se_apaga(self) -> None:
-        rules = dict(REGLAS_SANAS, require_tests_to_close=False)
-        self.assertErrorCon('"rules.require_tests_to_close"', [feature()], rules)
+    def test_require_tests_to_close_does_not_switch_off(self) -> None:
+        rules = dict(SANE_RULES, require_tests_to_close=False)
+        self.assertErrorWith('"rules.require_tests_to_close"', [feature()], rules)
 
 
-class TestFormaDeLaFeature(FeatureListCase):
-    def test_falta_un_campo_obligatorio(self) -> None:
-        sin_spec = feature()
-        del sin_spec["spec"]
-        self.assertErrorCon('falta el campo "spec"', [sin_spec])
+class TestFeatureShape(FeatureListCase):
+    def test_a_required_field_is_missing(self) -> None:
+        without_spec = feature()
+        del without_spec["spec"]
+        self.assertErrorWith('the "spec" field is missing', [without_spec])
 
-    def test_id_duplicado(self) -> None:
-        self.assertErrorCon(
-            "id duplicado", [feature(id=1, name="a"), feature(id=1, name="b")]
+    def test_duplicate_id(self) -> None:
+        self.assertErrorWith(
+            "duplicate id", [feature(id=1, name="a"), feature(id=1, name="b")]
         )
 
-    def test_name_duplicado(self) -> None:
-        self.assertErrorCon(
-            "name duplicado", [feature(id=1, name="misma"), feature(id=2, name="misma")]
+    def test_duplicate_name(self) -> None:
+        self.assertErrorWith(
+            "duplicate name", [feature(id=1, name="same"), feature(id=2, name="same")]
         )
 
-    def test_name_que_no_es_snake_case(self) -> None:
-        self.assertErrorCon("snake_case", [feature(name="Una Feature")])
+    def test_name_that_is_not_snake_case(self) -> None:
+        self.assertErrorWith("snake_case", [feature(name="A Feature")])
 
-    def test_id_que_no_es_entero(self) -> None:
-        self.assertErrorCon("entero >= 1", [feature(id="1")])
+    def test_id_that_is_not_an_integer(self) -> None:
+        self.assertErrorWith("integer >= 1", [feature(id="1")])
 
-    def test_title_vacio(self) -> None:
-        self.assertErrorCon('"title" no puede estar vacío', [feature(title="   ")])
+    def test_empty_title(self) -> None:
+        self.assertErrorWith('"title" cannot be empty', [feature(title="   ")])
 
-    def test_spec_con_ruta_invalida(self) -> None:
-        self.assertErrorCon('"spec" debe ser una ruta', [feature(spec="docs/otra.md")])
+    def test_spec_with_an_invalid_path(self) -> None:
+        self.assertErrorWith('"spec" must be a', [feature(spec="docs/other.md")])
 
-    def test_prioridad_invalida(self) -> None:
-        self.assertErrorCon("prioridad inválida", [feature(prioridad="urgentisima")])
+    def test_invalid_priority(self) -> None:
+        self.assertErrorWith("invalid priority", [feature(priority="super_urgent")])
 
-    def test_acceptance_vacio(self) -> None:
-        self.assertErrorCon('"acceptance" debe ser un array', [feature(acceptance=[])])
+    def test_empty_acceptance(self) -> None:
+        self.assertErrorWith('"acceptance" must be an array', [feature(acceptance=[])])
 
-    def test_acceptance_con_criterios_vacios(self) -> None:
-        self.assertErrorCon("criterios de", [feature(acceptance=["bien", "  "])])
+    def test_acceptance_with_empty_criteria(self) -> None:
+        self.assertErrorWith("criteria", [feature(acceptance=["fine", "  "])])
 
-    def test_feature_que_no_es_objeto(self) -> None:
-        self.assertErrorCon("no es un objeto", ["esto no es una feature"])
+    def test_feature_that_is_not_an_object(self) -> None:
+        self.assertErrorWith("is not an object", ["this is not a feature"])
 
 
-class TestCierreDeUnaFeature(FeatureListCase):
-    """Nadie se autoaprueba: cerrar exige pruebas y los dos informes."""
+class TestClosingAFeature(FeatureListCase):
+    """Nobody approves their own work: closing demands tests and both reports."""
 
-    def test_done_sin_ningun_test_falla(self) -> None:
-        self.crear_informes()
-        self.assertErrorCon("ni un solo test", [feature(status="done")])
+    def test_done_without_a_single_test_fails(self) -> None:
+        self.create_reports()
+        self.assertErrorWith("not a single test", [feature(status="done")])
 
-    def test_done_sin_informe_del_implementer_falla(self) -> None:
-        self.crear_test()
+    def test_done_without_the_implementer_report_fails(self) -> None:
+        self.create_test_file()
         os.makedirs(os.path.join(self.root, "progress"), exist_ok=True)
-        with open(os.path.join(self.root, "progress", "review_una_feature.md"), "w") as h:
-            h.write("**Veredicto:** APPROVED\n")
-        self.assertErrorCon("informe del implementer", [feature(status="done")])
+        with open(os.path.join(self.root, "progress", "review_a_feature.md"), "w") as h:
+            h.write("**Verdict:** APPROVED\n")
+        self.assertErrorWith("implementer's report", [feature(status="done")])
 
-    def test_done_sin_review_falla(self) -> None:
-        self.crear_test()
+    def test_done_without_a_review_fails(self) -> None:
+        self.create_test_file()
         os.makedirs(os.path.join(self.root, "progress"), exist_ok=True)
-        with open(os.path.join(self.root, "progress", "impl_una_feature.md"), "w") as h:
-            h.write("# informe\n")
-        self.assertErrorCon("informe del reviewer", [feature(status="done")])
+        with open(os.path.join(self.root, "progress", "impl_a_feature.md"), "w") as h:
+            h.write("# report\n")
+        self.assertErrorWith("reviewer's report", [feature(status="done")])
 
-    def test_done_con_changes_requested_falla(self) -> None:
-        self.crear_test()
-        self.crear_informes(veredicto="CHANGES_REQUESTED")
-        self.assertErrorCon("pidió cambios", [feature(status="done")])
+    def test_done_with_changes_requested_fails(self) -> None:
+        self.create_test_file()
+        self.create_reports(verdict="CHANGES_REQUESTED")
+        self.assertErrorWith("requested changes", [feature(status="done")])
 
-    def test_done_con_un_review_que_no_dice_nada_falla(self) -> None:
-        self.crear_test()
+    def test_done_with_a_review_that_says_nothing_fails(self) -> None:
+        self.create_test_file()
         os.makedirs(os.path.join(self.root, "progress"), exist_ok=True)
-        with open(os.path.join(self.root, "progress", "impl_una_feature.md"), "w") as h:
-            h.write("# informe\n")
-        with open(os.path.join(self.root, "progress", "review_una_feature.md"), "w") as h:
-            h.write("# review\n\nMe parece bien.\n")
-        self.assertErrorCon("no dice APPROVED", [feature(status="done")])
+        with open(os.path.join(self.root, "progress", "impl_a_feature.md"), "w") as h:
+            h.write("# report\n")
+        with open(os.path.join(self.root, "progress", "review_a_feature.md"), "w") as h:
+            h.write("# review\n\nLooks fine to me.\n")
+        self.assertErrorWith("does not say APPROVED", [feature(status="done")])
 
-    def test_done_bien_cerrada_pasa(self) -> None:
-        self.cerrar_bien()
-        self.assertEqual(self.errores([feature(status="done")]), [])
+    def test_a_properly_closed_feature_passes(self) -> None:
+        self.close_properly()
+        self.assertEqual(self.errors([feature(status="done")]), [])
 
-    def test_sin_features_done_no_exige_nada(self) -> None:
-        self.assertEqual(self.errores([feature(status="pending")]), [])
+    def test_with_no_done_features_nothing_is_demanded(self) -> None:
+        self.assertEqual(self.errors([feature(status="pending")]), [])
 
 
-class TestElSchemaNoSeDesincroniza(unittest.TestCase):
-    """El schema es documentación y nadie lo carga: sin esto, deriva.
+class TestTheSchemaDoesNotDrift(unittest.TestCase):
+    """The schema is documentation and nobody loads it: without this, it drifts.
 
-    `schema/feature_list.schema.json` describe el formato y
-    `validate_feature_list.py` lo hace cumplir. Son dos fuentes de verdad, y la
-    única forma de que no digan cosas distintas dentro de seis meses es
-    compararlas acá.
+    `schema/feature_list.schema.json` describes the format and
+    `validate_feature_list.py` enforces it. They are two sources of truth, and
+    the only way they will not say different things in six months is to compare
+    them here.
     """
 
     @classmethod
     def setUpClass(cls) -> None:
-        raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        with open(os.path.join(raiz, "schema", "feature_list.schema.json"), encoding="utf-8") as h:
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        with open(os.path.join(root, "schema", "feature_list.schema.json"), encoding="utf-8") as h:
             cls.schema = json.load(h)
         cls.feature = cls.schema["definitions"]["feature"]
 
-    def test_los_estados_coinciden(self) -> None:
+    def test_the_statuses_match(self) -> None:
         self.assertEqual(
             self.feature["properties"]["status"]["enum"], list(vfl.VALID_STATUS)
         )
 
-    def test_las_prioridades_coinciden(self) -> None:
+    def test_the_priorities_match(self) -> None:
         self.assertEqual(
-            self.feature["properties"]["prioridad"]["enum"], list(vfl.PRIORIDADES)
+            self.feature["properties"]["priority"]["enum"], list(vfl.PRIORITIES)
         )
 
-    def test_los_campos_obligatorios_coinciden(self) -> None:
+    def test_the_required_fields_match(self) -> None:
         self.assertEqual(
             sorted(self.feature["required"]), sorted(vfl.REQUIRED_FEATURE_KEYS)
         )
 
-    def test_los_patrones_coinciden(self) -> None:
+    def test_the_patterns_match(self) -> None:
         self.assertEqual(self.feature["properties"]["name"]["pattern"], vfl.NAME_RE.pattern)
         self.assertEqual(self.feature["properties"]["spec"]["pattern"], vfl.SPEC_RE.pattern)
 
-    def test_las_reglas_declaradas_estan_en_el_schema(self) -> None:
-        declaradas = set(self.schema["properties"]["rules"]["properties"])
+    def test_the_declared_rules_are_in_the_schema(self) -> None:
+        declared = set(self.schema["properties"]["rules"]["properties"])
         self.assertTrue(
-            set(vfl.REGLAS_FIJAS).issubset(declaradas),
-            f"el schema no declara {set(vfl.REGLAS_FIJAS) - declaradas}",
+            set(vfl.FIXED_RULES).issubset(declared),
+            f"the schema does not declare {set(vfl.FIXED_RULES) - declared}",
         )
 
 
-class TestArchivo(FeatureListCase):
-    def test_archivo_inexistente(self) -> None:
-        errs = vfl.validate(os.path.join(self.root, "no_existe.json"))
+class TestTheFile(FeatureListCase):
+    def test_missing_file(self) -> None:
+        errs = vfl.validate(os.path.join(self.root, "does_not_exist.json"))
         self.assertEqual(len(errs), 1)
-        self.assertIn("No existe", errs[0])
+        self.assertIn("does not exist", errs[0])
 
-    def test_json_invalido(self) -> None:
+    def test_invalid_json(self) -> None:
         path = os.path.join(self.root, "feature_list.json")
         with open(path, "w", encoding="utf-8") as handle:
-            handle.write("{ roto")
-        self.assertIn("no es JSON válido", vfl.validate(path)[0])
+            handle.write("{ broken")
+        self.assertIn("is not valid JSON", vfl.validate(path)[0])
 
 
 if __name__ == "__main__":

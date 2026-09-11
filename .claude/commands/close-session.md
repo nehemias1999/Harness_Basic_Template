@@ -1,30 +1,29 @@
 ---
-description: Cierra la sesión siguiendo el lifecycle de AGENTS.md §5.
+description: Closes the session following the lifecycle in AGENTS.md §5.
 ---
 
-Cierra la sesión actual siguiendo el lifecycle de `AGENTS.md §5`. Recórrelo en
-orden y reporta cada paso:
+Close the current session following the lifecycle in `AGENTS.md §5`. Walk it in
+order and report each step:
 
-1. **Verificador verde.** Ejecuta `./init.ps1` (Windows) o `./init.sh` (POSIX).
-   Si está rojo, **no cierres**: informa de qué falla y para.
-2. **Estado de la feature.** Comprueba el veredicto en
-   `progress/review_<feature>.md`:
-   - `APPROVED` → `status: "done"` en `feature_list.json`.
-   - `CHANGES_REQUESTED` o sin review → déjala en `in_progress`, o en `blocked`
-     si hay un bloqueo real, y dilo explícitamente.
-3. **Historial.** Añade al final de `progress/history.md` una entrada con el
-   formato que documenta ese archivo (fecha, feature, agente, resultado,
-   archivos tocados, verificación, notas).
-4. **Reset.** Vacía `progress/current.md` dejando solo la plantilla.
-5. **Ronda de análisis a medias.** Si hay requisitos en `draft`, dilo antes de
-   cerrar, con sus ids: el humano decide entre aprobarlos (`/approve 1 2`) o dejarlos
-   para la próxima sesión. Un `draft` sobrevive perfectamente al cierre — lo
-   que no puede pasar es que se cierre en silencio y nadie se acuerde de que
-   había algo esperando su OK.
-6. **Limpieza.** Revisa `git status`: sin `*.tmp`, sin `__pycache__` fuera del
-   `.gitignore`, sin `print()` de debug ni TODOs sin contexto.
-7. **Resumen final** en 3-5 líneas: qué se cerró, qué queda pendiente y cuál es
-   el primer paso de la próxima sesión.
+1. **Green verifier.** Run `./init.ps1` (Windows) or `./init.sh` (POSIX). If it
+   is red, **do not close**: report what fails and stop.
+2. **Feature status.** Check the verdict in `progress/review_<feature>.md`:
+   - `APPROVED` → `status: "done"` in `feature_list.json`.
+   - `CHANGES_REQUESTED` or no review → leave it `in_progress`, or `blocked` if
+     there is a real blocker, and say so explicitly.
+3. **History.** Append an entry to `progress/history.md` in the format that
+   file documents (date, feature, agent, result, files touched, verification,
+   notes).
+4. **Reset.** Empty `progress/current.md`, leaving only the template.
+5. **Half-finished analysis round.** If there are requirements in `draft`, say
+   so before closing, with their ids: the human decides between approving them
+   (`/approve 1 2`) or leaving them for the next session. A `draft` survives
+   the close perfectly well — what must not happen is closing in silence and
+   nobody remembering something was waiting for their OK.
+6. **Cleanliness.** Check `git status`: no `*.tmp`, no `__pycache__` outside
+   the `.gitignore`, no debug `print()` calls and no context-free TODOs.
+7. **Final summary** in 3-5 lines: what was closed, what is left, and the first
+   step of the next session.
 
-**Archivos que toca:** `feature_list.json`, `progress/current.md`,
-`progress/history.md`. Nunca `src/`, `tests/` ni `specs/`.
+**Files it touches:** `feature_list.json`, `progress/current.md`,
+`progress/history.md`. Never `src/`, `tests/` or `specs/`.

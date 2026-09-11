@@ -1,28 +1,28 @@
 ---
-description: Audita el repositorio contra los checkpoints C1-C5 de CHECKPOINTS.md.
+description: Audits the repository against checkpoints C1-C5 in CHECKPOINTS.md.
 ---
 
-Audita el estado del repositorio contra `CHECKPOINTS.md` y reporta el resultado.
-Es una revisión **de solo lectura**: no arregles nada, solo informa.
+Audit the state of the repository against `CHECKPOINTS.md` and report the
+result. This is a **read-only** review: do not fix anything, only report.
 
-**Qué hacer:**
+**What to do:**
 
-1. Ejecuta el verificador (`./init.ps1` o `./init.sh`) y guarda su salida.
-2. Recorre los cinco bloques C1-C5 de `CHECKPOINTS.md`, checkbox por checkbox.
-   Marca cada uno:
-   - `[x]` se cumple
-   - `[ ]` no se cumple → cita archivo y línea concretos
-   - `[-]` no aplica todavía → di por qué (p. ej. proyecto sin código aún)
-3. Comprueba que no hay **referencias colgantes**, con el script que lo hace
-   por vos: `python scripts/validate_referencias.py .`. Recorre las rutas
-   mencionadas en la documentación de referencia y los punteros `spec` de
+1. Run the verifier (`./init.ps1` or `./init.sh`) and keep its output.
+2. Walk the five C1-C5 blocks of `CHECKPOINTS.md`, checkbox by checkbox. Mark
+   each one:
+   - `[x]` satisfied
+   - `[ ]` not satisfied → cite the concrete file and line
+   - `[-]` does not apply yet → say why (for example, no code in the project yet)
+3. Check there are no **dangling references**, with the script that does it for
+   you: `python scripts/validate_references.py .`. It walks the paths mentioned
+   in the reference documentation and the `spec` pointers in
    `feature_list.json`.
-4. Ejecuta los tests del propio arnés y reporta el resultado:
-   `python -m unittest discover -s scripts/tests -v`. No los corre el
-   verificador a propósito (ver `docs/scripts.md`), así que si nadie los mira
-   aquí, no los mira nadie.
-5. Cierra con un veredicto de una línea: `SANO`, `SANO CON AVISOS` o
-   `ROTO`, y los 3 arreglos más urgentes si no está sano.
+4. Run the harness's own tests and report the result:
+   `python -m unittest discover -s scripts/tests -v`. The verifier does not run
+   them on purpose (see `docs/scripts.md`), so if nobody looks at them here,
+   nobody looks at them at all.
+5. Close with a one-line verdict: `HEALTHY`, `HEALTHY WITH WARNINGS` or
+   `BROKEN`, plus the 3 most urgent fixes if it is not healthy.
 
-**No toques ningún archivo.** Si quieres dejar traza, escribe el informe en
-`progress/harness_check.md` y devuelve solo la referencia.
+**Do not touch any file.** If you want to leave a trace, write the report to
+`progress/harness_check.md` and return only the reference.

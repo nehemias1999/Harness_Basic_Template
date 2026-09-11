@@ -1,60 +1,60 @@
-"""Comprueba que nadie trabaja sobre un requisito que nadie aprobó.
+"""Checks that nobody is working on a requirement nobody approved.
 
-Propósito
-    La aprobación de un requisito no es un "dale" en el chat: es
-    `estado: aprobado` en el frontmatter de `specs/REQ-00N_*.md`, versionado en
-    git, más el paso de sus features de `draft` a `pending`. Este validador
-    comprueba que las dos cosas concuerdan y bloquea la sesión si alguien
-    avanzó sobre un requisito que sigue en análisis.
+Purpose
+    Approving a requirement is not a "sure, go ahead" in the chat: it is
+    `status: approved` in the front matter of `specs/REQ-00N_*.md`, versioned in
+    git, plus its features moving from `draft` to `pending`. This validator
+    checks that both halves agree, and blocks the session if someone moved ahead
+    on a requirement that is still under analysis.
 
-    Es la contracara del otro gate del arnés: `validate_project_setup.py` exige
-    que exista criterio de calidad, este exige que exista alcance aprobado.
+    It is the counterpart of the harness's other gate: `validate_project_setup.py`
+    demands that quality criteria exist, this one demands that approved scope
+    exists.
 
-Qué bloquea (`[FAIL]`)
-    - Una feature con `status` distinto de `draft` cuyo spec no está aprobado.
-      "Distinto de draft" se evalúa por complemento: inventar un estado nuevo
-      no es una forma de escaparse del gate.
-    - Hay código en `src/` (recursivo, cualquier lenguaje) y ningún requisito
-      aprobado: se empezó a programar antes de definir qué había que hacer.
-    - Una feature sin campo `spec`, o apuntando a un archivo que no existe.
-    - Un spec `aprobado` con preguntas abiertas sin responder (`- [ ]`): la
-      regla de "no asumir nada", hecha ejecutable.
-    - Un spec `aprobado` sin `aprobado_el`, con una fecha que no es AAAA-MM-DD,
-      o sin ninguna feature que lo referencie.
-    - Un spec `aprobado` sin `aprobado_hash`, o cuyo contenido cambió después
-      de aprobarse. Sin esa huella, "aprobado" solo significa que alguien
-      escribió la palabra: editarle los criterios luego no dejaba rastro.
-    - Un frontmatter con claves repetidas, o con un `id` que no coincide con el
-      nombre del archivo (ese spec no se carga).
-    - Una feature con prioridad MÁS ALTA que la de su requisito. Bajarla es
-      legal (una parte accesoria); subirla es una contradicción silenciosa.
-    - Nombre de archivo fuera de `REQ-00N_nombre_snake_case.md`, `id` duplicado,
-      `id` del frontmatter que no coincide con el del nombre, `estado` o
-      `prioridad` inválidos.
+What it blocks (`[FAIL]`)
+    - A feature whose `status` is anything but `draft` hanging off a spec that
+      is not approved. "Anything but draft" is evaluated by complement:
+      inventing a new status is not a way out of the gate.
+    - There is code under `src/` (recursively, any language) and no approved
+      requirement: somebody started programming before deciding what to build.
+    - A feature with no `spec` field, or pointing at a file that does not exist.
+    - An approved spec with unanswered open questions (`- [ ]`): the "assume
+      nothing" rule, made executable.
+    - An approved spec with no `approved_on`, with a date that is not YYYY-MM-DD,
+      or with no feature referencing it.
+    - An approved spec with no `approved_hash`, or whose content changed after it
+      was approved. Without that fingerprint, "approved" only means somebody
+      typed the word: editing the criteria afterwards left no trace.
+    - Front matter with repeated keys, or an `id` that does not match the file
+      name (that spec is not loaded).
+    - A feature with a HIGHER priority than its requirement. Lowering it is legal
+      (an accessory part); raising it is a silent contradiction.
+    - A file name outside `REQ-00N_snake_case_name.md`, a duplicate `id`, or an
+      invalid `status` or `priority`.
 
-Qué solo avisa (`[WARN]`)
-    - Todavía no existe `specs/`, o no hay ningún requisito.
-    - Hay requisitos en `draft` esperando el OK del humano.
-    - Un spec aprobado cuyas features siguen todas en `draft` (aprobación a
-      medias: falta terminar `/approve`).
-    - Un spec `descartado` del que todavía cuelgan features en `draft`.
-    - Hay una feature `in_progress` de menor prioridad que algo encolado. El
-      arnés avisa del adelantamiento; decidir si se interrumpe es del humano.
+What it only warns about (`[WARN]`)
+    - `specs/` does not exist yet, or there are no requirements.
+    - There are requirements in `draft` waiting for the human's OK.
+    - An approved spec whose features are all still in `draft` (half-finished
+      approval: `/approve` did not run to the end).
+    - A `discarded` spec that still has features in `draft` hanging off it.
+    - A feature is `in_progress` with lower priority than something queued. The
+      harness flags the overtake; deciding whether to interrupt is the human's.
 
-Quién lo ejecuta
-    `init.ps1` e `init.sh` (sección 5). Ambos usan este mismo módulo para que
-    las reglas no se desincronicen entre Windows y POSIX. También a mano.
+Who runs it
+    `init.ps1` and `init.sh` (section 5). Both use this same module so the rules
+    cannot drift apart between Windows and POSIX. Also by hand.
 
-Uso
-    python scripts/validate_requirements.py [raiz_del_repo]
-    python scripts/validate_requirements.py --huella specs/REQ-001_x.md
+Usage
+    python scripts/validate_requirements.py [repo_root]
+    python scripts/validate_requirements.py --fingerprint specs/REQ-001_x.md
 
-    La segunda forma imprime la huella del contenido de un spec: es lo que
-    escribe `/approve` en `aprobado_hash` al firmarlo.
+    The second form prints a spec's content fingerprint: it is what `/approve`
+    writes into `approved_hash` when it signs it.
 
 Exit codes
-    0  la trazabilidad requisito -> feature es coherente (los [WARN] no bloquean)
-    1  hay trabajo sobre algo sin aprobar, o la trazabilidad está rota
+    0  requirement -> feature traceability is coherent (warnings do not block)
+    1  there is work on something unapproved, or traceability is broken
 """
 from __future__ import annotations
 
@@ -67,38 +67,38 @@ import sys
 SPEC_DIR = "specs"
 SPEC_FILE_RE = re.compile(r"^REQ-(\d{3})_[a-z0-9]+(?:_[a-z0-9]+)*\.md$")
 SPEC_POINTER_RE = re.compile(r"^specs/REQ-\d{3}_[a-z0-9]+(?:_[a-z0-9]+)*\.md$")
-# Una pregunta sin responder es cualquier casilla vacía, escrita como sea:
-# "- [ ]", "- [  ]", "* []". Aceptar solo una grafía dejaba una salida trivial
-# para aprobar un requisito con huecos.
+# An unanswered question is any empty checkbox, however it is written:
+# "- [ ]", "- [  ]", "* []". Accepting a single spelling left a trivial way out
+# for approving a requirement full of holes.
 OPEN_QUESTION_RE = re.compile(r"^\s*[-*+]\s*\[\s*\]", re.MULTILINE)
 FENCED_BLOCK_RE = re.compile(r"^\s*(?:```|~~~).*?^\s*(?:```|~~~)", re.MULTILINE | re.DOTALL)
-FECHA_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 FRONTMATTER_RE = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
-# §7 (features derivadas) y §8 (bitácora) cambian después de aprobar sin que
-# cambie lo aprobado: quedan fuera de la huella.
-SECCIONES_MUTABLES_RE = re.compile(
+# §7 (derived features) and §8 (change log) change after approval without what
+# was approved changing: they stay out of the fingerprint.
+MUTABLE_SECTIONS_RE = re.compile(
     r"^##\s*[78]\..*?(?=^##\s|\Z)", re.MULTILINE | re.DOTALL
 )
 
-# Extensiones que cuentan como "código de la aplicación" al comprobar que
-# nadie programó antes de tener un requisito aprobado. No es solo Python: la
-# plantilla es de Python, pero el arnés no tiene por qué serlo.
+# Extensions that count as "application code" when checking that nobody
+# programmed before having an approved requirement. Not just Python: the
+# template happens to be Python, but the harness does not have to be.
 CODE_EXT = (".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".rb",
             ".cs", ".php", ".kt", ".swift", ".sh", ".ps1", ".sql")
 
-VALID_ESTADO = ("draft", "aprobado", "descartado")
-PRIORIDADES = ("critica", "alta", "media", "baja")
-REQUIRED_KEYS = ("id", "titulo", "estado", "prioridad")
+VALID_STATUS = ("draft", "approved", "discarded")
+PRIORITIES = ("critical", "high", "medium", "low")
+REQUIRED_KEYS = ("id", "title", "status", "priority")
 
-# Todo lo que NO es `draft` significa que alguien ya trabajó sobre la feature.
-# Se define por complemento y no como lista blanca a propósito: con una lista
-# blanca, inventar un estado nuevo en `rules.valid_status` bastaba para que la
-# feature escapara del gate sin que ningún validador la mirase.
+# Anything that is NOT `draft` means somebody already worked on the feature.
+# It is defined by complement rather than as an allowlist on purpose: with an
+# allowlist, inventing a new status in `rules.valid_status` was enough for a
+# feature to escape the gate without any validator looking at it.
 DRAFT = "draft"
 
 
-def es_trabajada(status: object) -> bool:
-    """Cualquier estado que no sea `draft` cuenta como trabajo empezado."""
+def is_worked_on(status: object) -> bool:
+    """Any status other than `draft` counts as work already started."""
     return status is not None and status != DRAFT
 
 
@@ -108,25 +108,25 @@ def _read(path: str) -> str:
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]] | None:
-    """Frontmatter YAML plano (`clave: valor`). None si no hay o no cierra.
+    """Flat YAML front matter (`key: value`). None if absent or unterminated.
 
-    Devuelve (campos, claves_repetidas). Deliberadamente mínimo: el arnés no
-    tiene dependencias externas, así que no hay PyYAML. A cambio, la plantilla
-    del spec obliga a claves planas.
+    Returns (fields, repeated_keys). Deliberately minimal: the harness has no
+    external dependencies, so there is no PyYAML. In exchange, the spec template
+    requires flat keys.
 
-    No se interpreta `#` como comentario dentro del valor: un título legítimo
-    puede llevar almohadilla (`Arregla el bug #123`) y truncarlo en silencio es
-    peor que no soportar comentarios inline.
+    `#` is not treated as a comment inside a value: a legitimate title can carry
+    a hash (`Fix bug #123`), and truncating it silently is worse than not
+    supporting inline comments.
     """
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return None
 
     fields: dict[str, str] = {}
-    repetidas: list[str] = []
+    repeated: list[str] = []
     for line in lines[1:]:
         if line.strip() == "---":
-            return fields, repetidas
+            return fields, repeated
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         if ":" not in line:
@@ -137,63 +137,62 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]] | None:
         if not key:
             continue
         if key in fields:
-            repetidas.append(key)
+            repeated.append(key)
             continue
         fields[key] = value
     return None
 
 
-def huella_del_spec(contenido: str) -> str:
-    """Huella del contenido que se aprobó.
+def spec_fingerprint(content: str) -> str:
+    """Fingerprint of the content that was approved.
 
-    Aprobar un requisito no puede significar solo "en algún momento alguien
-    escribió `aprobado`": sin una huella del texto, editarle los criterios
-    después no deja rastro y el reviewer termina juzgando contra algo que el
-    humano nunca leyó.
+    Approving a requirement cannot mean only "at some point somebody wrote
+    `approved`": without a fingerprint of the text, editing its criteria
+    afterwards leaves no trace and the reviewer ends up judging against
+    something the human never read.
 
-    Se excluyen dos secciones que sí cambian legítimamente después de aprobar:
-    la tabla de features derivadas (§7) y la bitácora de revisiones (§8). Todo
-    lo demás cuenta, incluido el frontmatter que no sea de estado: es una lista
-    negra corta a propósito, para que cualquier sección nueva quede protegida
-    por defecto.
+    Two sections that do change legitimately after approval are excluded: the
+    derived-features table (§7) and the change log (§8). Everything else counts,
+    which makes it a deliberately short denylist: any new section is protected
+    by default.
     """
-    cuerpo = FRONTMATTER_RE.sub("", contenido, count=1)
-    cuerpo = SECCIONES_MUTABLES_RE.sub("", cuerpo)
-    lineas = [linea.rstrip() for linea in cuerpo.splitlines()]
-    normalizado = "\n".join(linea for linea in lineas if linea)
-    return hashlib.sha256(normalizado.encode("utf-8")).hexdigest()[:16]
+    body = FRONTMATTER_RE.sub("", content, count=1)
+    body = MUTABLE_SECTIONS_RE.sub("", body)
+    lines = [line.rstrip() for line in body.splitlines()]
+    normalized = "\n".join(line for line in lines if line)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
 
-def contar_codigo(src_dir: str) -> int:
-    """Archivos de código bajo `src/`, recursivamente.
+def count_code(src_dir: str) -> int:
+    """Code files under `src/`, recursively.
 
-    Recursivo y multi-lenguaje a propósito: mirar solo `src/*.py` dejaba ciego
-    al arnés ante `src/paquete/modulo.py` y ante cualquier proyecto que no
-    fuera Python.
+    Recursive and multi-language on purpose: looking only at `src/*.py` left the
+    harness blind to `src/package/module.py` and to any project that was not
+    Python.
     """
     total = 0
     if not os.path.isdir(src_dir):
         return 0
-    for carpeta, dirs, archivos in os.walk(src_dir):
+    for _folder, dirs, files in os.walk(src_dir):
         dirs[:] = [d for d in dirs if d not in ("__pycache__", ".venv", "node_modules")]
-        for archivo in archivos:
-            if archivo == "__init__.py":
+        for name in files:
+            if name == "__init__.py":
                 continue
-            if archivo.endswith(CODE_EXT):
+            if name.endswith(CODE_EXT):
                 total += 1
     return total
 
 
-def prioridad_rank(prioridad: str) -> int:
-    """0 es lo más crítico. Un valor desconocido va al final."""
+def priority_rank(priority: str) -> int:
+    """0 is the most critical. An unknown value goes last."""
     try:
-        return PRIORIDADES.index(prioridad)
+        return PRIORITIES.index(priority)
     except ValueError:
-        return len(PRIORIDADES)
+        return len(PRIORITIES)
 
 
 def load_specs(root: str) -> tuple[dict[str, dict], list[str]]:
-    """Devuelve ({ruta relativa: datos del spec}, errores de formato)."""
+    """Returns ({relative path: spec data}, format errors)."""
     specs: dict[str, dict] = {}
     fails: list[str] = []
     spec_dir = os.path.join(root, SPEC_DIR)
@@ -210,56 +209,56 @@ def load_specs(root: str) -> tuple[dict[str, dict], list[str]]:
         match = SPEC_FILE_RE.match(name)
         if not match:
             fails.append(
-                f"{rel}: el nombre no sigue el formato REQ-00N_nombre_snake_case.md"
+                f"{rel}: the file name does not follow REQ-00N_snake_case_name.md"
             )
             continue
 
-        contenido = _read(os.path.join(spec_dir, name))
-        parsed = parse_frontmatter(contenido)
+        content = _read(os.path.join(spec_dir, name))
+        parsed = parse_frontmatter(content)
         if parsed is None:
-            fails.append(f"{rel}: no tiene frontmatter, o no está cerrado con ---")
+            fails.append(f"{rel}: has no front matter, or it is not closed with ---")
             continue
-        fields, repetidas = parsed
-        if repetidas:
+        fields, repeated = parsed
+        if repeated:
             fails.append(
-                f"{rel}: el frontmatter repite {', '.join(sorted(set(repetidas)))}. "
-                f"Con claves duplicadas no se sabe cuál vale: deja una sola"
+                f"{rel}: the front matter repeats {', '.join(sorted(set(repeated)))}. "
+                f"With duplicate keys there is no telling which one counts: keep one"
             )
 
         missing = [key for key in REQUIRED_KEYS if not fields.get(key)]
         if missing:
-            fails.append(f"{rel}: falta en el frontmatter: {', '.join(missing)}")
+            fails.append(f"{rel}: missing from the front matter: {', '.join(missing)}")
             continue
 
         spec_id = fields["id"]
         if spec_id != f"REQ-{match.group(1)}":
             fails.append(
-                f"{rel}: el id del frontmatter ({spec_id}) no coincide con el "
-                f"del nombre del archivo (REQ-{match.group(1)}). No se carga: "
-                f"arregla uno de los dos antes de seguir"
+                f"{rel}: the front matter id ({spec_id}) does not match the one in "
+                f"the file name (REQ-{match.group(1)}). It is not loaded: fix one "
+                f"of the two before going on"
             )
             continue
         if spec_id in seen_ids:
-            fails.append(f"{rel}: id {spec_id} duplicado (ya lo usa {seen_ids[spec_id]})")
+            fails.append(f"{rel}: duplicate id {spec_id} (already used by {seen_ids[spec_id]})")
         seen_ids[spec_id] = rel
 
-        if fields["estado"] not in VALID_ESTADO:
+        if fields["status"] not in VALID_STATUS:
             fails.append(
-                f"{rel}: estado inválido \"{fields['estado']}\" "
-                f"(usa: {', '.join(VALID_ESTADO)})"
+                f"{rel}: invalid status \"{fields['status']}\" "
+                f"(use: {', '.join(VALID_STATUS)})"
             )
-        if fields["prioridad"] not in PRIORIDADES:
+        if fields["priority"] not in PRIORITIES:
             fails.append(
-                f"{rel}: prioridad inválida \"{fields['prioridad']}\" "
-                f"(usa: {', '.join(PRIORIDADES)})"
+                f"{rel}: invalid priority \"{fields['priority']}\" "
+                f"(use: {', '.join(PRIORITIES)})"
             )
 
-        fields["_ruta"] = rel
-        fields["_huella"] = huella_del_spec(contenido)
-        # Se ignoran los bloques de código: un checkbox de ejemplo dentro de
-        # unas comillas triples no es una pregunta sin responder.
-        fields["_preguntas_abiertas"] = len(
-            OPEN_QUESTION_RE.findall(FENCED_BLOCK_RE.sub("", contenido))
+        fields["_path"] = rel
+        fields["_fingerprint"] = spec_fingerprint(content)
+        # Fenced blocks are ignored: an example checkbox inside triple backticks
+        # is not an unanswered question.
+        fields["_open_questions"] = len(
+            OPEN_QUESTION_RE.findall(FENCED_BLOCK_RE.sub("", content))
         )
         specs[rel] = fields
 
@@ -267,7 +266,7 @@ def load_specs(root: str) -> tuple[dict[str, dict], list[str]]:
 
 
 def check(root: str) -> tuple[list[str], list[str]]:
-    """Devuelve (fallos, avisos)."""
+    """Returns (failures, warnings)."""
     fails: list[str] = []
     warns: list[str] = []
 
@@ -276,30 +275,30 @@ def check(root: str) -> tuple[list[str], list[str]]:
 
     if not os.path.isdir(os.path.join(root, SPEC_DIR)):
         warns.append(
-            "todavía no existe specs/: el proyecto no tiene alcance aprobado, "
-            "así que no hay nada que desarrollar. Empieza por /requirements"
+            "specs/ does not exist yet: the project has no approved scope, so "
+            "there is nothing to build. Start with /requirements"
         )
     elif not specs:
         warns.append(
-            "specs/ no tiene ningún requisito todavía: no hay alcance aprobado, "
-            "así que no hay nada que desarrollar. Empieza por /requirements"
+            "specs/ has no requirements yet: there is no approved scope, so there "
+            "is nothing to build. Start with /requirements"
         )
 
     # --- feature_list.json --------------------------------------------------
     try:
         data = json.loads(_read(os.path.join(root, "feature_list.json")))
     except (OSError, json.JSONDecodeError):
-        # No duplicamos el diagnóstico: de la forma del archivo se ocupa la
-        # sección anterior del verificador. Pero seguimos: lo que se pueda
-        # decir de specs/ vale igual, y callarlo dejaría al humano arreglando
-        # los problemas de a uno.
-        fails.append("No se pudo leer feature_list.json (ver sección 4)")
+        # The diagnosis is not duplicated: the shape of that file is section 4's
+        # job. But we carry on: whatever can be said about specs/ is still worth
+        # saying, and staying quiet would leave the human fixing problems one at
+        # a time.
+        fails.append("Could not read feature_list.json (see section 4)")
         data = {}
 
     features = data.get("features")
     if not isinstance(features, list):
         if data:
-            fails.append("\"features\" no es un array (ver sección 4)")
+            fails.append("\"features\" is not an array (see section 4)")
         features = []
 
     referenced: dict[str, list[dict]] = {}
@@ -313,143 +312,144 @@ def check(root: str) -> tuple[list[str], list[str]]:
 
         if not spec_path:
             fails.append(
-                f"{label}: no tiene campo \"spec\". Toda feature sale de un "
-                f"requisito de specs/"
+                f"{label}: has no \"spec\" field. Every feature comes from a "
+                f"requirement in specs/"
             )
             continue
         if not SPEC_POINTER_RE.match(str(spec_path)):
             fails.append(
-                f"{label}: \"spec\" debe ser una ruta specs/REQ-00N_nombre.md "
-                f"(vale \"{spec_path}\")"
+                f"{label}: \"spec\" must be a specs/REQ-00N_name.md path "
+                f"(it says \"{spec_path}\")"
             )
             continue
 
         spec = specs.get(spec_path)
         if spec is None:
-            fails.append(f"{label}: apunta a {spec_path}, que no existe")
+            fails.append(f"{label}: points at {spec_path}, which does not exist")
             continue
 
         referenced.setdefault(spec_path, []).append(feature)
 
-        if es_trabajada(status) and spec["estado"] != "aprobado":
+        if is_worked_on(status) and spec["status"] != "approved":
             fails.append(
-                f"{label}: status \"{status}\" pero {spec_path} sigue en estado "
-                f"\"{spec['estado']}\" (nadie aprobó ese requisito)"
+                f"{label}: status \"{status}\" but {spec_path} is still "
+                f"\"{spec['status']}\" (nobody approved that requirement)"
             )
 
-        prioridad = feature.get("prioridad")
-        if prioridad in PRIORIDADES and spec["prioridad"] in PRIORIDADES:
-            if prioridad_rank(prioridad) < prioridad_rank(spec["prioridad"]):
+        priority = feature.get("priority")
+        if priority in PRIORITIES and spec["priority"] in PRIORITIES:
+            if priority_rank(priority) < priority_rank(spec["priority"]):
                 fails.append(
-                    f"{label}: prioridad \"{prioridad}\" es más alta que la de su "
-                    f"requisito (\"{spec['prioridad']}\"). Una feature puede bajarla, "
-                    f"no subirla: cambia la del requisito si de verdad es más urgente"
+                    f"{label}: priority \"{priority}\" is higher than its "
+                    f"requirement's (\"{spec['priority']}\"). A feature may lower it, "
+                    f"not raise it: change the requirement if it really is more urgent"
                 )
 
-    # --- coherencia por requisito -------------------------------------------
-    aprobados = 0
-    en_draft: list[str] = []
+    # --- per-requirement coherence ------------------------------------------
+    approved = 0
+    in_draft: list[str] = []
     for rel, spec in sorted(specs.items()):
-        estado = spec["estado"]
-        suyas = referenced.get(rel, [])
+        status = spec["status"]
+        its_features = referenced.get(rel, [])
 
-        if estado == "draft":
-            en_draft.append(f"{spec['id']} [{spec['prioridad']}]")
+        if status == DRAFT:
+            in_draft.append(f"{spec['id']} [{spec['priority']}]")
             continue
-        if estado == "descartado":
-            # Las features que ya salieron de draft las agarra el gate de
-            # arriba. Las que siguen en draft son alcance zombi: nadie las va a
-            # implementar y nadie las va a echar de menos hasta que estorben.
-            vivas = [f for f in suyas if f.get("status") == DRAFT]
-            if vivas:
-                nombres = ", ".join(str(f.get("id")) for f in vivas)
+        if status == "discarded":
+            # Features that already left draft are caught by the gate above. The
+            # ones still in draft are zombie scope: nobody is going to implement
+            # them and nobody is going to miss them until they get in the way.
+            alive = [f for f in its_features if f.get("status") == DRAFT]
+            if alive:
+                names = ", ".join(str(f.get("id")) for f in alive)
                 warns.append(
-                    f"{rel}: está descartado pero todavía cuelgan de él "
-                    f"{len(vivas)} feature(s) en draft (id {nombres}): bórralas "
-                    f"o muévelas a otro requisito"
+                    f"{rel}: is discarded but {len(alive)} feature(s) in draft still "
+                    f"hang off it (id {names}): delete them or move them to another "
+                    f"requirement"
                 )
             continue
-        if estado != "aprobado":
+        if status != "approved":
             continue
 
-        aprobados += 1
-        fecha = spec.get("aprobado_el", "")
-        if not fecha:
-            fails.append(f"{rel}: está aprobado pero le falta la fecha en aprobado_el")
-        elif not FECHA_RE.match(fecha):
+        approved += 1
+        date = spec.get("approved_on", "")
+        if not date:
+            fails.append(f"{rel}: is approved but has no date in approved_on")
+        elif not DATE_RE.match(date):
             fails.append(
-                f"{rel}: aprobado_el vale \"{fecha}\" y tiene que ser una fecha "
-                f"AAAA-MM-DD. Una aprobación sin fecha real no sirve como traza"
+                f"{rel}: approved_on says \"{date}\" and it has to be a YYYY-MM-DD "
+                f"date. An approval without a real date is no use as a trace"
             )
-        huella_declarada = spec.get("aprobado_hash", "")
-        if not huella_declarada:
+
+        declared = spec.get("approved_hash", "")
+        if not declared:
             fails.append(
-                f"{rel}: está aprobado pero no tiene aprobado_hash. Sin huella "
-                f"del texto aprobado, editarle los criterios después no deja "
-                f"rastro: vuelve a aprobarlo con /approve"
+                f"{rel}: is approved but has no approved_hash. Without a fingerprint "
+                f"of the approved text, editing its criteria later leaves no trace: "
+                f"approve it again with /approve"
             )
-        elif huella_declarada != spec["_huella"]:
+        elif declared != spec["_fingerprint"]:
             fails.append(
-                f"{rel}: el requisito cambió DESPUÉS de aprobarse "
-                f"(huella {huella_declarada}, ahora {spec['_huella']}). "
-                f"Vuelve el spec a draft y que el humano apruebe la versión "
-                f"nueva, o deshaz el cambio"
+                f"{rel}: the requirement changed AFTER being approved "
+                f"(fingerprint {declared}, now {spec['_fingerprint']}). "
+                f"Send the spec back to draft and have the human approve the new "
+                f"version, or undo the change"
             )
-        if spec["_preguntas_abiertas"]:
+        if spec["_open_questions"]:
             fails.append(
-                f"{rel}: está aprobado con {spec['_preguntas_abiertas']} pregunta(s) "
-                f"abierta(s) sin responder. Un requisito no se aprueba con huecos: "
-                f"respóndelas y marca la casilla, o vuelve el spec a draft"
+                f"{rel}: is approved with {spec['_open_questions']} unanswered open "
+                f"question(s). A requirement is not approved with holes in it: "
+                f"answer them and tick the box, or send the spec back to draft"
             )
-        if not suyas:
+        if not its_features:
             fails.append(
-                f"{rel}: está aprobado pero ninguna feature lo referencia. "
-                f"Deriva sus features o vuélvelo a draft"
+                f"{rel}: is approved but no feature references it. "
+                f"Derive its features or send it back to draft"
             )
-        elif all(f.get("status") == "draft" for f in suyas):
+        elif all(f.get("status") == DRAFT for f in its_features):
             warns.append(
-                f"{rel}: aprobado pero sus {len(suyas)} feature(s) siguen en draft "
-                f"(aprobación a medias: termina /approve)"
+                f"{rel}: approved but its {len(its_features)} feature(s) are still in "
+                f"draft (half-finished approval: run /approve to the end)"
             )
 
-    if en_draft:
+    if in_draft:
         warns.append(
-            f"{len(en_draft)} requisito(s) en draft esperando tu OK: "
-            f"{', '.join(en_draft)}"
+            f"{len(in_draft)} requirement(s) in draft waiting for your OK: "
+            f"{', '.join(in_draft)}"
         )
 
-    # --- no se programa sin requisitos --------------------------------------
-    modules = contar_codigo(os.path.join(root, "src"))
-    if modules and aprobados == 0:
+    # --- no programming without requirements --------------------------------
+    modules = count_code(os.path.join(root, "src"))
+    if modules and approved == 0:
         fails.append(
-            f"hay {modules} archivo(s) de código en src/ y ningún requisito "
-            f"aprobado: se empezó a programar antes de definir qué había que hacer"
+            f"there are {modules} code file(s) in src/ and no approved requirement: "
+            f"somebody started programming before deciding what to build"
         )
 
-    # --- adelantamiento por prioridad ---------------------------------------
-    en_curso = [f for f in features if isinstance(f, dict) and f.get("status") == "in_progress"]
-    encoladas = [f for f in features if isinstance(f, dict) and f.get("status") == "pending"]
-    for feature in en_curso:
-        rank = prioridad_rank(str(feature.get("prioridad")))
-        urgentes = [f for f in encoladas if prioridad_rank(str(f.get("prioridad"))) < rank]
-        if urgentes:
-            ids = ", ".join(str(f.get("id")) for f in urgentes)
+    # --- priority overtake ---------------------------------------------------
+    in_progress = [f for f in features if isinstance(f, dict) and f.get("status") == "in_progress"]
+    queued = [f for f in features if isinstance(f, dict) and f.get("status") == "pending"]
+    for feature in in_progress:
+        rank = priority_rank(str(feature.get("priority")))
+        urgent = [f for f in queued if priority_rank(str(f.get("priority"))) < rank]
+        if urgent:
+            ids = ", ".join(str(f.get("id")) for f in urgent)
             warns.append(
                 f"feature {feature.get('id')} {feature.get('name')} "
-                f"({feature.get('prioridad')}) está in_progress y hay trabajo de más "
-                f"prioridad encolado (id {ids}): termínala, o pásala a blocked con "
-                f"motivo antes de seguir"
+                f"({feature.get('priority')}) is in_progress and there is "
+                f"higher-priority work queued (id {ids}): finish it, or move it to "
+                f"blocked with a reason before going on"
             )
 
     return fails, warns
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) > 2 and argv[1] == "--huella":
+    if len(argv) > 2 and argv[1] == "--fingerprint":
         try:
-            print(huella_del_spec(_read(argv[2])))
+            print(spec_fingerprint(_read(argv[2])))
         except OSError as exc:
-            print(f"[FAIL]  no se pudo leer {argv[2]}: {exc}")
+            print(f"[FAIL]  could not read {argv[2]}: {exc}")
             return 1
         return 0
 
@@ -462,19 +462,19 @@ def main(argv: list[str]) -> int:
         print(f"[FAIL]  {fail}")
 
     if fails:
-        print("[FAIL]  Hay trabajo sobre requisitos sin aprobar, o la trazabilidad")
-        print("        está rota: resuélvelo antes de avanzar.")
+        print("[FAIL]  There is work on unapproved requirements, or traceability")
+        print("        is broken: resolve it before going on.")
         return 1
 
     specs, _ = load_specs(root)
-    aprobados = sum(1 for s in specs.values() if s.get("estado") == "aprobado")
+    approved = sum(1 for s in specs.values() if s.get("status") == "approved")
     try:
         total_features = len(json.loads(_read(os.path.join(root, "feature_list.json")))["features"])
     except (OSError, KeyError, TypeError, json.JSONDecodeError):
         total_features = 0
     print(
-        f"[OK]    {len(specs)} requisitos ({aprobados} aprobados), "
-        f"{total_features} features trazadas"
+        f"[OK]    {len(specs)} requirements ({approved} approved), "
+        f"{total_features} features traced"
     )
     return 0
 

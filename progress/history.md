@@ -1,21 +1,21 @@
-# Historial de sesiones
+# Session history
 
-> Bitácora **append-only**. Al cerrar cada sesión se añade al final el resumen
-> que vivía en `progress/current.md`. Nunca se edita ni se borra una entrada
-> anterior: este archivo es la memoria del proyecto entre context windows.
+> **Append-only** log. When each session closes, the summary that lived in
+> `progress/current.md` is added at the end. A previous entry is never edited
+> or deleted: this file is the project's memory between context windows.
 
-Formato de cada entrada:
+Format of each entry:
 
 ```markdown
 ## <YYYY-MM-DD> — feature <id> <name>
 
-- **Agente:** <quién trabajó>
-- **Resultado:** done | blocked
-- **Archivos tocados:** <lista>
-- **Verificación:** <salida resumida de init>
-- **Notas:** <decisiones o bloqueos relevantes para la siguiente sesión>
+- **Agent:** <who worked on it>
+- **Result:** done | blocked
+- **Files touched:** <list>
+- **Verification:** <summarised init output>
+- **Notes:** <decisions or blockers relevant to the next session>
 ```
 
 ---
 
-_Sin sesiones registradas todavía._
+_No sessions recorded yet._

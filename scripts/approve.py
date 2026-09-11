@@ -1,38 +1,38 @@
-"""Firma requisitos: el paso mecánico de la aprobación.
+"""Signs requirements: the mechanical half of approval.
 
-Propósito
-    Convertir tu OK en estado verificable, sin que dependa de que un agente
-    recuerde siete pasos en el orden correcto. Aprobar significa tocar cuatro
-    cosas a la vez —el estado del spec, la fecha, la huella del contenido y el
-    estado de sus features— y a medio camino el repositorio queda incoherente.
-    Eso es trabajo de un script, no de la prosa de un `.md`.
+Purpose
+    Turn your OK into verifiable state, without depending on an agent
+    remembering seven steps in the right order. Approving means touching four
+    things at once — the spec's status, the date, the content fingerprint and
+    the status of its features — and halfway through the repository is
+    incoherent. That is a script's job, not a `.md`'s prose.
 
-    Lo que NO automatiza es la decisión. Vos nombrás qué se aprueba; el script
-    se niega si lo que nombraste tiene preguntas sin responder o ya estaba
-    aprobado.
+    What it does NOT automate is the decision. You name what gets approved; the
+    script refuses if what you named has unanswered questions or was already
+    approved.
 
-Uso
-    python scripts/approve.py 1 2            # REQ-001 y REQ-002
-    python scripts/approve.py REQ-003        # da igual cómo escribas el id
-    python scripts/approve.py all            # todos los que estén en draft
-    python scripts/approve.py 1 architecture # y además firma docs/architecture.md
+Usage
+    python scripts/approve.py 1 2              # REQ-001 and REQ-002
+    python scripts/approve.py REQ-003          # spell the id however you like
+    python scripts/approve.py all              # every requirement in draft
+    python scripts/approve.py 1 architecture   # and also sign docs/architecture.md
     python scripts/approve.py all --dry-run
 
-Qué hace por cada requisito nombrado
-    1. `estado: draft` -> `aprobado`, con `aprobado_el` y `actualizado` de hoy.
-    2. Calcula y escribe `aprobado_hash`: la huella del texto aprobado.
-    3. Añade la fila de la bitácora (§8).
-    4. Pasa sus features de `draft` a `pending`.
+What it does per named requirement
+    1. `status: draft` -> `approved`, with today's `approved_on` and `updated`.
+    2. Computes and writes `approved_hash`: the fingerprint of the approved text.
+    3. Appends the change-log row (§8).
+    4. Moves its features from `draft` to `pending`.
 
-La palabra `architecture`
-    Borra la nota de plantilla de `docs/architecture.md`, que es el acto por el
-    que ese documento queda aprobado. Va aparte y hay que nombrarla a propósito:
-    es el criterio contra el que el reviewer juzga todo el código, y aprobarlo
-    de rebote junto a un requisito sería exactamente el descuido que el arnés
-    intenta evitar.
+The `architecture` keyword
+    Removes the template note from `docs/architecture.md`, which is the act that
+    makes that document approved. It goes separately and has to be named on
+    purpose: it is the criterion the reviewer judges all the code against, and
+    approving it as a side effect of a requirement would be exactly the
+    oversight the harness is trying to prevent.
 
 Exit codes
-    0  firmado (o simulado) · 1 no se pudo: el motivo va impreso
+    0  signed (or simulated) · 1 could not: the reason is printed
 """
 from __future__ import annotations
 
@@ -50,302 +50,303 @@ import validate_requirements as vr  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Las palabras clave van en inglés, como los comandos. Se aceptan igual en
-# español: la misma tolerancia que con los ids, que valen como 1, 001 o REQ-001.
-TODOS = ("all", "todos")
-ARQUITECTURA = ("architecture", "arquitectura")
-MARCADOR_PLANTILLA = "Este archivo es una plantilla"
+# The keywords are English, like the commands. Spanish still works: the same
+# tolerance the ids get, which are valid as 1, 001 or REQ-001.
+ALL = ("all", "todos")
+ARCHITECTURE = ("architecture", "arquitectura")
+TEMPLATE_MARKER = "This file is a template"
 ID_RE = re.compile(r"^(?:req-)?0*(\d{1,3})$", re.IGNORECASE)
-# Ojo con `\s*$`: se come el salto de línea final y la fila nueva queda
-# separada por un blanco, que en markdown parte la tabla en dos.
-FILA_BITACORA_RE = re.compile(r"^\|.*\|[ 	]*$", re.MULTILINE)
+# Careful with `\s*$`: it eats the trailing newline and the new row ends up
+# separated by a blank line, which in markdown splits the table in two.
+LOG_ROW_RE = re.compile(r"^\|.*\|[ \t]*$", re.MULTILINE)
 
 
-def ok(mensaje: str) -> None:
-    print(f"[OK]    {mensaje}")
+def ok(message: str) -> None:
+    print(f"[OK]    {message}")
 
 
-def warn(mensaje: str) -> None:
-    print(f"[WARN]  {mensaje}")
+def warn(message: str) -> None:
+    print(f"[WARN]  {message}")
 
 
-def fail(mensaje: str) -> None:
-    print(f"[FAIL]  {mensaje}")
+def fail(message: str) -> None:
+    print(f"[FAIL]  {message}")
 
 
-def normalizar_id(texto: str) -> str | None:
-    """`1`, `001`, `REQ-001`, `req-1` -> `REQ-001`. None si no es un id."""
-    match = ID_RE.match(texto.strip())
+def normalize_id(text: str) -> str | None:
+    """`1`, `001`, `REQ-001`, `req-1` -> `REQ-001`. None if it is not an id."""
+    match = ID_RE.match(text.strip())
     if not match:
         return None
     return f"REQ-{int(match.group(1)):03d}"
 
 
-def quien_firma(root: str) -> str:
-    """El nombre de quien aprueba, para la bitácora."""
+def who_signs(root: str) -> str:
+    """The name of whoever approves, for the change log."""
     try:
-        salida = subprocess.run(
+        result = subprocess.run(
             ["git", "config", "user.name"],
             cwd=root, capture_output=True, text=True, encoding="utf-8",
         )
-        nombre = salida.stdout.strip()
+        name = result.stdout.strip()
     except OSError:
-        nombre = ""
-    return nombre or "humano"
+        name = ""
+    return name or "human"
 
 
-class Aprobador:
-    def __init__(self, root: str, objetivos: list[str], dry_run: bool, por: str = "") -> None:
+class Approver:
+    def __init__(self, root: str, targets: list[str], dry_run: bool, by: str = "") -> None:
         self.root = root
-        self.objetivos = objetivos
+        self.targets = targets
         self.dry_run = dry_run
-        self.por = por or quien_firma(root)
-        self.hoy = datetime.date.today().isoformat()
-        self.specs, self.errores_de_formato = vr.load_specs(root)
+        self.by = by or who_signs(root)
+        self.today = datetime.date.today().isoformat()
+        self.specs, self.format_errors = vr.load_specs(root)
 
-    # -- utilidades ------------------------------------------------------
-    def leer(self, rel: str) -> str:
+    # -- helpers ---------------------------------------------------------
+    def read(self, rel: str) -> str:
         with open(os.path.join(self.root, rel), encoding="utf-8") as handle:
             return handle.read()
 
-    def escribir(self, rel: str, contenido: str) -> None:
+    def write(self, rel: str, content: str) -> None:
         if self.dry_run:
             return
         with open(os.path.join(self.root, rel), "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(contenido)
+            handle.write(content)
 
-    def sufijo(self) -> str:
-        return " (simulado)" if self.dry_run else ""
+    def suffix(self) -> str:
+        return " (simulated)" if self.dry_run else ""
 
-    # -- resolución de lo que se pidió ------------------------------------
-    def resolver(self) -> tuple[list[str], bool, list[str]]:
-        """Devuelve (rutas de specs a firmar, si toca arquitectura, errores)."""
-        errores: list[str] = []
-        arquitectura = False
-        pedidos: list[str] = []
+    # -- resolving what was asked for -------------------------------------
+    def resolve(self) -> tuple[list[str], bool, list[str]]:
+        """Returns (spec paths to sign, whether architecture is included, errors)."""
+        errors: list[str] = []
+        architecture = False
+        requested: list[str] = []
 
-        for objetivo in self.objetivos:
-            plano = objetivo.strip().lower().rstrip(",")
-            if plano in ARQUITECTURA:
-                arquitectura = True
+        for target in self.targets:
+            plain = target.strip().lower().rstrip(",")
+            if plain in ARCHITECTURE:
+                architecture = True
                 continue
-            if plano in TODOS:
-                pedidos.extend(
+            if plain in ALL:
+                requested.extend(
                     rel for rel, spec in sorted(self.specs.items())
-                    if spec["estado"] == vr.DRAFT
+                    if spec["status"] == vr.DRAFT
                 )
                 continue
 
-            req_id = normalizar_id(plano)
+            req_id = normalize_id(plain)
             if not req_id:
-                errores.append(
-                    f'no entiendo "{objetivo}": usa un id (1, 001, REQ-001), '
-                    f'"{TODOS[0]}" o "{ARQUITECTURA[0]}"'
+                errors.append(
+                    f'I do not understand "{target}": use an id (1, 001, REQ-001), '
+                    f'"{ALL[0]}" or "{ARCHITECTURE[0]}"'
                 )
                 continue
 
-            rutas = [rel for rel, spec in self.specs.items() if spec["id"] == req_id]
-            if not rutas:
-                errores.append(f"{req_id}: no existe ningún requisito con ese id")
+            paths = [rel for rel, spec in self.specs.items() if spec["id"] == req_id]
+            if not paths:
+                errors.append(f"{req_id}: there is no requirement with that id")
                 continue
-            pedidos.extend(rutas)
+            requested.extend(paths)
 
-        # Sin duplicados, en orden estable.
-        vistos: list[str] = []
-        for ruta in pedidos:
-            if ruta not in vistos:
-                vistos.append(ruta)
-        return vistos, arquitectura, errores
+        # No duplicates, stable order.
+        seen: list[str] = []
+        for path in requested:
+            if path not in seen:
+                seen.append(path)
+        return seen, architecture, errors
 
-    def comprobar(self, rutas: list[str]) -> list[str]:
-        """Motivos por los que algo de lo pedido no se puede firmar."""
-        problemas: list[str] = []
-        for rel in rutas:
+    def check(self, paths: list[str]) -> list[str]:
+        """Reasons why something that was asked for cannot be signed."""
+        problems: list[str] = []
+        for rel in paths:
             spec = self.specs[rel]
-            if spec["estado"] == "aprobado":
-                problemas.append(f"{spec['id']}: ya estaba aprobado")
-            elif spec["estado"] != vr.DRAFT:
-                problemas.append(
-                    f"{spec['id']}: está en estado \"{spec['estado']}\", no en draft"
+            if spec["status"] == "approved":
+                problems.append(f"{spec['id']}: was already approved")
+            elif spec["status"] != vr.DRAFT:
+                problems.append(
+                    f"{spec['id']}: its status is \"{spec['status']}\", not draft"
                 )
-            if spec["_preguntas_abiertas"]:
-                problemas.append(
-                    f"{spec['id']}: tiene {spec['_preguntas_abiertas']} pregunta(s) sin "
-                    f"responder. Respondelas y marcá la casilla antes de aprobar"
+            if spec["_open_questions"]:
+                problems.append(
+                    f"{spec['id']}: has {spec['_open_questions']} unanswered "
+                    f"question(s). Answer them and tick the box before approving"
                 )
-        return problemas
+        return problems
 
-    # -- firma -------------------------------------------------------------
-    def firmar(self, rel: str) -> None:
+    # -- signing -----------------------------------------------------------
+    def sign(self, rel: str) -> None:
         spec = self.specs[rel]
-        contenido = self.leer(rel)
-        cabecera, _, cuerpo = contenido.partition("\n---\n")
+        content = self.read(rel)
+        header, _, body = content.partition("\n---\n")
 
-        campos = []
-        for linea in cabecera.splitlines():
-            clave = linea.split(":", 1)[0].strip()
-            if clave == "estado":
-                campos.append("estado: aprobado")
-            elif clave == "aprobado_el":
-                campos.append(f"aprobado_el: {self.hoy}")
-            elif clave == "actualizado":
-                campos.append(f"actualizado: {self.hoy}")
-            elif clave == "aprobado_hash":
-                continue  # se recalcula abajo
+        fields = []
+        for line in header.splitlines():
+            key = line.split(":", 1)[0].strip()
+            if key == "status":
+                fields.append("status: approved")
+            elif key == "approved_on":
+                fields.append(f"approved_on: {self.today}")
+            elif key == "updated":
+                fields.append(f"updated: {self.today}")
+            elif key == "approved_hash":
+                continue  # recomputed below
             else:
-                campos.append(linea)
-        if not any(c.startswith("aprobado_el:") for c in campos):
-            campos.append(f"aprobado_el: {self.hoy}")
+                fields.append(line)
+        if not any(f.startswith("approved_on:") for f in fields):
+            fields.append(f"approved_on: {self.today}")
 
-        cuerpo = self.agregar_bitacora(cuerpo, spec.get("ronda", "?"))
-        nuevo = "\n".join(campos) + "\n---\n" + cuerpo
+        body = self.append_log_row(body, spec.get("round", "?"))
+        updated = "\n".join(fields) + "\n---\n" + body
 
-        # La huella ignora el frontmatter y la bitácora, así que da igual el
-        # orden; se calcula sobre el texto ya final para que no haya sorpresas.
-        huella = vr.huella_del_spec(nuevo)
-        campos.append(f"aprobado_hash: {huella}")
-        nuevo = "\n".join(campos) + "\n---\n" + cuerpo
+        # The fingerprint ignores the front matter and the change log, so the
+        # order does not matter; it is computed over the final text so there are
+        # no surprises.
+        fingerprint = vr.spec_fingerprint(updated)
+        fields.append(f"approved_hash: {fingerprint}")
+        updated = "\n".join(fields) + "\n---\n" + body
 
-        self.escribir(rel, nuevo)
-        ok(f"{spec['id']} -> aprobado el {self.hoy}, huella {huella}{self.sufijo()}")
+        self.write(rel, updated)
+        ok(f"{spec['id']} -> approved on {self.today}, fingerprint {fingerprint}{self.suffix()}")
 
-    def agregar_bitacora(self, cuerpo: str, ronda: str) -> str:
-        fila = f"| {ronda} | {self.hoy} | aprobado | {self.por} |"
-        marca = re.search(r"^##\s*8\..*$", cuerpo, re.MULTILINE)
-        if not marca:
-            return cuerpo.rstrip("\n") + f"\n\n## 8. Bitácora de revisiones\n\n{fila}\n"
-        seccion = cuerpo[marca.end():]
-        filas = list(FILA_BITACORA_RE.finditer(seccion))
-        if not filas:
-            return cuerpo.rstrip("\n") + f"\n{fila}\n"
-        corte = marca.end() + filas[-1].end()
-        return cuerpo[:corte] + f"\n{fila}" + cuerpo[corte:]
+    def append_log_row(self, body: str, round_number: str) -> str:
+        row = f"| {round_number} | {self.today} | approved | {self.by} |"
+        marker = re.search(r"^##\s*8\..*$", body, re.MULTILINE)
+        if not marker:
+            return body.rstrip("\n") + f"\n\n## 8. Change log\n\n{row}\n"
+        section = body[marker.end():]
+        rows = list(LOG_ROW_RE.finditer(section))
+        if not rows:
+            return body.rstrip("\n") + f"\n{row}\n"
+        cut = marker.end() + rows[-1].end()
+        return body[:cut] + f"\n{row}" + body[cut:]
 
-    def promover_features(self, rutas: list[str]) -> int:
-        ruta_json = os.path.join(self.root, "feature_list.json")
-        with open(ruta_json, encoding="utf-8") as handle:
-            datos = json.load(handle)
+    def promote_features(self, paths: list[str]) -> int:
+        json_path = os.path.join(self.root, "feature_list.json")
+        with open(json_path, encoding="utf-8") as handle:
+            data = json.load(handle)
 
-        promovidas = 0
-        for feature in datos.get("features") or []:
+        promoted = 0
+        for feature in data.get("features") or []:
             if not isinstance(feature, dict):
                 continue
-            if feature.get("spec") in rutas and feature.get("status") == vr.DRAFT:
+            if feature.get("spec") in paths and feature.get("status") == vr.DRAFT:
                 feature["status"] = "pending"
-                promovidas += 1
+                promoted += 1
                 ok(
                     f"feature {feature.get('id')} {feature.get('name')} "
-                    f"-> pending{self.sufijo()}"
+                    f"-> pending{self.suffix()}"
                 )
 
-        if promovidas and not self.dry_run:
-            with open(ruta_json, "w", encoding="utf-8", newline="\n") as handle:
-                handle.write(json.dumps(datos, indent=2, ensure_ascii=False) + "\n")
-        return promovidas
+        if promoted and not self.dry_run:
+            with open(json_path, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+        return promoted
 
-    def comprobar_arquitectura(self) -> list[str]:
+    def check_architecture(self) -> list[str]:
         try:
-            contenido = self.leer("docs/architecture.md")
+            content = self.read("docs/architecture.md")
         except OSError as exc:
-            return [f"no se pudo leer docs/architecture.md: {exc}"]
+            return [f"could not read docs/architecture.md: {exc}"]
 
-        if MARCADOR_PLANTILLA not in contenido:
+        if TEMPLATE_MARKER not in content:
             return []
 
-        huecos = placeholders_pendientes(contenido)
-        if huecos:
+        holes = pending_placeholders(content)
+        if holes:
             return [
-                f"docs/architecture.md todavía tiene placeholders sin rellenar "
-                f"({', '.join(huecos[:4])}). No se aprueba a medias: devolvéselo "
-                f"al analyst"
+                f"docs/architecture.md still has unfilled placeholders "
+                f"({', '.join(holes[:4])}). It does not get approved half-done: "
+                f"send it back to the analyst"
             ]
         return []
 
-    def firmar_arquitectura(self) -> None:
+    def sign_architecture(self) -> None:
         rel = "docs/architecture.md"
-        contenido = self.leer(rel)
+        content = self.read(rel)
 
-        if MARCADOR_PLANTILLA not in contenido:
-            warn("docs/architecture.md ya estaba aprobada, no había nota que quitar")
+        if TEMPLATE_MARKER not in content:
+            warn("docs/architecture.md was already approved, there was no note to remove")
             return
 
-        lineas = [l for l in contenido.splitlines() if MARCADOR_PLANTILLA not in l]
-        self.escribir(rel, "\n".join(lineas).strip() + "\n")
-        ok(f"docs/architecture.md -> aprobada (se quitó la nota de plantilla){self.sufijo()}")
+        lines = [line for line in content.splitlines() if TEMPLATE_MARKER not in line]
+        self.write(rel, "\n".join(lines).strip() + "\n")
+        ok(f"docs/architecture.md -> approved (template note removed){self.suffix()}")
 
-    # -- orquestación -------------------------------------------------------
-    def ejecutar(self) -> int:
-        if self.errores_de_formato:
-            for error in self.errores_de_formato:
+    # -- orchestration ------------------------------------------------------
+    def run(self) -> int:
+        if self.format_errors:
+            for error in self.format_errors:
                 fail(error)
-            fail("Hay specs mal formados: arreglalos antes de aprobar nada.")
+            fail("There are malformed specs: fix them before approving anything.")
             return 1
 
-        rutas, arquitectura, errores = self.resolver()
-        for error in errores:
+        paths, architecture, errors = self.resolve()
+        for error in errors:
             fail(error)
-        if errores:
+        if errors:
             return 1
 
-        if not rutas and not arquitectura:
-            warn("no hay nada que aprobar: ningún requisito en draft")
+        if not paths and not architecture:
+            warn("there is nothing to approve: no requirement is in draft")
             return 0
 
-        problemas = self.comprobar(rutas)
-        if arquitectura:
-            problemas.extend(self.comprobar_arquitectura())
-        for problema in problemas:
-            fail(problema)
-        if problemas:
-            # Todo o nada: firmar la mitad deja el repositorio en un estado que
-            # el verificador marca en rojo y que nadie pidió.
-            fail("No se firmó nada.")
+        problems = self.check(paths)
+        if architecture:
+            problems.extend(self.check_architecture())
+        for problem in problems:
+            fail(problem)
+        if problems:
+            # All or nothing: signing half of it leaves the repository in a state
+            # the verifier flags red and nobody asked for.
+            fail("Nothing was signed.")
             return 1
 
-        modo = " (simulacro: no se escribe nada)" if self.dry_run else ""
-        print(f"-- Firmando {len(rutas)} requisito(s){modo} ----------------------")
+        mode = " (dry run: nothing is written)" if self.dry_run else ""
+        print(f"-- Signing {len(paths)} requirement(s){mode} ----------------------")
 
-        for rel in rutas:
-            self.firmar(rel)
-        promovidas = self.promover_features(rutas)
+        for rel in paths:
+            self.sign(rel)
+        promoted = self.promote_features(paths)
 
-        if arquitectura:
-            self.firmar_arquitectura()
+        if architecture:
+            self.sign_architecture()
 
         print("")
-        if rutas and not promovidas:
+        if paths and not promoted:
             warn(
-                "ningún requisito tenía features en draft: derivalas con "
-                "/requirements antes de seguir, o el verificador lo va a decir"
+                "no requirement had features in draft: derive them with "
+                "/requirements before going on, or the verifier will say so"
             )
-        ok(f"{len(rutas)} requisito(s) firmados, {promovidas} feature(s) en pending")
-        print("        Siguiente: ejecutá el verificador y después /next-feature.")
+        ok(f"{len(paths)} requirement(s) signed, {promoted} feature(s) now pending")
+        print("        Next: run the verifier and then /next-feature.")
         return 0
 
 
-def placeholders_pendientes(texto: str) -> list[str]:
-    """Los `<huecos>` que queden, ignorando los comentarios HTML de ayuda."""
+def pending_placeholders(text: str) -> list[str]:
+    """Any `<holes>` left, ignoring the helper HTML comments."""
     import validate_project_setup as vps
 
-    return vps.find_placeholders(texto)
+    return vps.find_placeholders(text)
 
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
-        description="Firma los requisitos que le nombres."
+        description="Signs the requirements you name."
     )
     parser.add_argument(
-        "objetivos",
+        "targets",
         nargs="+",
         metavar="ID",
-        help='ids (1, 001, REQ-001), "all", o "architecture"',
+        help='ids (1, 001, REQ-001), "all", or "architecture"',
     )
-    parser.add_argument("--dry-run", action="store_true", help="No escribe nada")
-    parser.add_argument("--por", default="", help="Quién aprueba (para la bitácora)")
+    parser.add_argument("--dry-run", action="store_true", help="Writes nothing")
+    parser.add_argument("--by", default="", help="Who approves (for the change log)")
     parser.add_argument("--root", default=REPO_ROOT, help=argparse.SUPPRESS)
     args = parser.parse_args(argv[1:])
 
-    return Aprobador(args.root, args.objetivos, args.dry_run, args.por).ejecutar()
+    return Approver(args.root, args.targets, args.dry_run, args.by).run()
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 * text=auto eol=lf
 
-# Los verificadores dependen del final de línea: init.sh se ejecuta en bash
-# (un CRLF lo rompe con "bad interpreter") y init.ps1 vive en Windows.
+# The verifiers depend on line endings: init.sh runs under bash (a CRLF breaks
+# it with "bad interpreter") and init.ps1 lives on Windows.
 *.sh   text eol=lf
 *.py   text eol=lf
 *.ps1  text eol=crlf

@@ -1,5 +1,5 @@
 {
-  "$schema_comment": "Hooks y permisos del arnés. Los hooks los ejecuta Claude Code, no el agente. Para que un hook BLOQUEE hay que salir con exit 2 y escribir el motivo por stderr: con exit 1 la salida se muestra y la sesión sigue igual. De eso se ocupa scripts/harness_hook.py, que además funciona en Windows y en POSIX. PreToolUse es el único que llega ANTES de la escritura; los otros dos llegan cuando ya ocurrió. En permisos, deny gana siempre sobre allow. Ver docs/scripts.md.",
+  "$schema_comment": "Harness hooks and permissions. Claude Code runs the hooks, not the agent. For a hook to BLOCK it has to exit with 2 and write the reason to stderr: with exit 1 the output is shown and the session carries on. scripts/harness_hook.py takes care of that, and it works on both Windows and POSIX. PreToolUse is the only one that arrives BEFORE the write; the other two arrive once it already happened. In permissions, deny always beats allow. See docs/scripts.md.",
   "hooks": {
     "PreToolUse": [
       {
@@ -8,7 +8,7 @@
           {
             "type": "command",
             "command": "python scripts/harness_hook.py pre-tool-use",
-            "description": "Impide escribir en la capa que verifica el trabajo, salvo mantenimiento declarado."
+            "description": "Stops writes to the layer that verifies the work, unless maintenance is declared."
           }
         ]
       }
@@ -20,7 +20,7 @@
           {
             "type": "command",
             "command": "python scripts/harness_hook.py post-edit",
-            "description": "Tras editar o escribir archivos, corre los tests y bloquea si están rotos."
+            "description": "After editing or writing files, runs the tests and blocks if they are broken."
           }
         ]
       }
@@ -31,7 +31,7 @@
           {
             "type": "command",
             "command": "python scripts/harness_hook.py stop",
-            "description": "Antes de cerrar la sesión, corre el verificador y bloquea el cierre si está en rojo."
+            "description": "Before closing the session, runs the verifier and blocks the close if it is red."
           }
         ]
       }
@@ -42,8 +42,8 @@
       "PowerShell(./bootstrap.ps1*)",
       "Bash(./bootstrap.ps1*)",
       "Bash(./bootstrap.sh*)",
-      "Bash(python scripts/instanciar.py*)",
-      "Bash(python3 scripts/instanciar.py*)",
+      "Bash(python scripts/instantiate.py*)",
+      "Bash(python3 scripts/instantiate.py*)",
       "Write(.git/**)",
       "Edit(.git/**)"
     ],

@@ -1,100 +1,105 @@
-# AGENTS.md — Mapa de navegación para agentes de IA
+# AGENTS.md — Navigation map for AI agents
 
-> Este archivo es el **punto de entrada** para cualquier agente que trabaje en este
-> repositorio. NO es una biblia de reglas: es un **mapa**. Lee solo lo que
-> necesites cuando lo necesites (divulgación progresiva).
+> This file is the **entry point** for any agent working in this repository.
+> It is NOT a bible of rules: it is a **map**. Read only what you need, when you
+> need it (progressive disclosure).
 
 ---
 
-## 1. Antes de empezar (obligatorio)
+## 1. Before you start (mandatory)
 
-1. Ejecuta el verificador y comprueba que termina sin errores:
-   `./init.ps1` en Windows, `./init.sh` en WSL/macOS/Linux. Si falla, **para**
-   y resuelve el entorno antes de tocar código. Si su sección 3 dice que el
-   proyecto no está configurado, no hay nada que implementar todavía: reporta
-   qué falta y para.
-2. Lee `progress/current.md` para entender en qué estado quedó la última sesión.
-3. Lee `feature_list.json` y elige **una** tarea con estado `pending`. No
-   trabajes en más de una a la vez. Las `draft` **no se trabajan**: son
-   requisitos que el humano todavía no aprobó. Si solo hay `draft`, no hay
-   nada que implementar — dilo y para.
+1. Run the verifier and check it finishes without errors: `./init.ps1` on
+   Windows, `./init.sh` on WSL/macOS/Linux. If it fails, **stop** and sort the
+   environment out before touching any code. If its section 3 says the project
+   is not configured, there is nothing to implement yet: report what is missing
+   and stop.
+2. Read `progress/current.md` to understand what state the last session left.
+3. Read `feature_list.json` and pick **one** task with status `pending`. Do not
+   work on more than one at a time. `draft` ones are **not worked on**: they are
+   requirements the human has not approved yet. If there are only `draft` ones,
+   there is nothing to implement — say so and stop.
 
-## 2. Mapa del repositorio
+## 2. Map of the repository
 
-| Archivo / carpeta                  | Qué contiene                                              | Cuándo leerlo |
-|------------------------------------|-----------------------------------------------------------|---------------|
-| `feature_list.json`                | Lista de tareas con estado (draft / pending / in_progress / done / blocked) y prioridad | Siempre, al empezar |
-| `specs/`                           | Los requisitos en formato SDD, uno por archivo. La fuente de la que salen las features | Antes de implementar, y siempre que dudes del alcance |
-| `progress/current.md`              | Estado de la sesión actual                                | Siempre, al empezar |
-| `progress/history.md`              | Bitácora append-only de sesiones anteriores               | Si necesitas contexto histórico |
-| `docs/architecture.md`             | Qué significa "hacer un buen trabajo" en este proyecto    | Antes de implementar |
-| `docs/conventions.md`              | Reglas de estilo, nombres, estructura                     | Antes de escribir código |
-| `docs/verification.md`             | Cómo verificar que tu trabajo funciona                    | Antes de declarar una tarea como `done` |
-| `docs/scripts.md`                  | Qué hace cada script, sus parámetros y qué hacer si falla | Si un script falla o no sabes cuál usar |
-| `CHECKPOINTS.md`                   | Criterios objetivos de "estado final correcto"            | Para auto-evaluarte |
-| `init.ps1` / `init.sh`             | El verificador (mismo comportamiento en ambas plataformas) | Al arrancar y antes de cerrar |
-| `bootstrap.ps1` / `bootstrap.sh`   | Instancia un proyecto nuevo desde la plantilla            | Solo la primera vez, y **lo lanza un humano**: está en la lista `deny` |
-| `scripts/validate_project_setup.py` | Comprueba que el proyecto está configurado (bloqueante)  | Lo llama el verificador; a mano si dudas de qué falta |
-| `scripts/validate_requirements.py` | Comprueba que nadie trabaja sobre un requisito sin aprobar (bloqueante) | Lo llama el verificador; a mano si dudas de la trazabilidad |
-| `schema/feature_list.schema.json`  | Formato exacto de una feature                             | Si dudas de la estructura del alcance |
-| `.claude/agents/`                  | Definiciones de subagentes (analista, líder, implementador, revisor) | Si orquestas trabajo |
-| `.claude/commands/`                | Slash commands del ciclo (`/requirements`, `/approve`, `/approve-all`, `/next-feature`, `/close-session`, `/harness-check`) | Para disparar el ciclo sin escribir el prompt |
-| `scripts/demo_orchestration.py`    | Demo del patrón Líder-Trabajador con escritura en disco   | Para entender la regla anti-teléfono-descompuesto |
-| `src/`                             | Código de la aplicación                                   | Para implementar |
-| `tests/`                           | Tests automáticos                                         | Para verificar |
+| File / folder                      | What it holds                                             | When to read it |
+|------------------------------------|-----------------------------------------------------------|-----------------|
+| `feature_list.json`                | The task list with status (draft / pending / in_progress / done / blocked) and priority | Always, at the start |
+| `specs/`                           | The requirements in SDD format, one per file. The source the features come from | Before implementing, and whenever the scope is unclear |
+| `progress/current.md`              | State of the current session                              | Always, at the start |
+| `progress/history.md`              | Append-only log of previous sessions                      | If you need historical context |
+| `docs/architecture.md`             | What "good work" means in this project                    | Before implementing |
+| `docs/conventions.md`              | Style, naming and structure rules                         | Before writing code |
+| `docs/verification.md`             | How to verify your work actually works                    | Before declaring a task `done` |
+| `docs/scripts.md`                  | What each script does, its parameters and what to do when it fails | If a script fails or you do not know which one to use |
+| `CHECKPOINTS.md`                   | Objective criteria for "correct final state"              | To assess yourself |
+| `init.ps1` / `init.sh`             | The verifier (same behaviour on both platforms)           | On start-up and before closing |
+| `bootstrap.ps1` / `bootstrap.sh`   | Instantiates a new project from the template              | Only the first time, and **a human runs it**: it is on the `deny` list |
+| `scripts/validate_project_setup.py` | Checks the project is configured (blocking)              | The verifier calls it; by hand if you are unsure what is missing |
+| `scripts/validate_requirements.py` | Checks nobody is working on an unapproved requirement (blocking) | The verifier calls it; by hand if traceability is unclear |
+| `schema/feature_list.schema.json`  | The exact shape of a feature                              | If you are unsure about the scope's structure |
+| `.claude/agents/`                  | Subagent definitions (analyst, leader, implementer, reviewer) | If you are orchestrating work |
+| `.claude/commands/`                | The cycle's slash commands (`/requirements`, `/approve`, `/approve-all`, `/next-feature`, `/close-session`, `/harness-check`) | To trigger the cycle without writing the prompt |
+| `scripts/demo_orchestration.py`    | Demo of the Leader-Worker pattern with results on disk    | To understand the anti-broken-telephone rule |
+| `src/`                             | Application code                                          | To implement |
+| `tests/`                           | Automated tests                                           | To verify |
 
-## 3. Reglas duras (no negociables)
+## 3. Hard rules (non-negotiable)
 
-- **No se trabaja lo que nadie aprobó.** Toda feature sale de un requisito de
-  `specs/` y no se toca hasta que ese requisito está `aprobado`. Un "dale" en
-  el chat no es una aprobación; lo es `/approve`, que queda en git.
-- **Una sola feature a la vez.** No mezcles cambios de varias tareas en la misma sesión.
-- **No declares una tarea `done` sin pruebas verdes.** Ejecuta el verificador y
-  asegúrate de que el bloque de tests pasa al 100%. Ojo: `[WARN] 0 tests`
-  significa "sin verificar", no "verde".
-- **No te autoapruebas.** El implementer no cierra su propia feature: la cierra
-  el líder tras un `APPROVED` del reviewer.
-- **Documenta lo que haces** en `progress/current.md` mientras trabajas, no al final.
-- **Deja el repositorio limpio** antes de cerrar la sesión (ver §5).
-- **Si no sabes algo, busca en `docs/`** antes de inventarlo.
+- **Nobody works on what nobody approved.** Every feature comes from a
+  requirement in `specs/` and is not touched until that requirement is
+  `approved`. A "sure, go ahead" in the chat is not an approval; `/approve` is,
+  and it lands in git.
+- **One feature at a time.** Do not mix changes from several tasks in the same
+  session.
+- **Do not declare a task `done` without green tests.** Run the verifier and
+  make sure the test block passes 100%. Careful: `[WARN] 0 tests` means
+  "unverified", not "green".
+- **You do not approve your own work.** The implementer does not close its own
+  feature: the leader does, after the reviewer's `APPROVED`.
+- **Document what you do** in `progress/current.md` while you work, not at the
+  end.
+- **Leave the repository clean** before closing the session (see §5).
+- **If you do not know something, look it up in `docs/`** before inventing it.
 
-## 4. Cómo elegir una tarea
+## 4. How to pick a task
 
 ```
-1. Abre feature_list.json
-2. Filtra por status == "pending"     (draft = requisito sin aprobar: se ignora)
-3. Si no queda ninguna, para: no hay trabajo aprobado
-4. Ordena por prioridad: critica > alta > media > baja
-5. A igual prioridad, coge la de menor "id"
+1. Open feature_list.json
+2. Filter by status == "pending"     (draft = unapproved requirement: ignored)
+3. If none is left, stop: there is no approved work
+4. Sort by priority: critical > high > medium > low
+5. At equal priority, take the lowest "id"
 ```
 
-**El cambio de estado lo hace quien trabaja, no quien coordina.** El
-`implementer` pone la feature en `in_progress` al tomarla y anota el plan en
-`progress/current.md`; el `leader` solo la pasa a `done`, y solo después de un
-`APPROVED`. Si dudas de cuál es la siguiente, no la calcules a ojo: el
-verificador la imprime en su sección 4.
+**The status change is made by whoever works, not by whoever coordinates.** The
+`implementer` moves the feature to `in_progress` when it takes it and writes the
+plan in `progress/current.md`; the `leader` only moves it to `done`, and only
+after an `APPROVED`. If you are unsure which one is next, do not work it out by
+eye: the verifier prints it in section 4.
 
-El orden lo fija `rules.orden_de_trabajo` en `feature_list.json`. La prioridad
-la hereda cada feature de su requisito, así que si te parece mal ordenada, lo
-que hay que discutir es el requisito — no la feature.
+The order is set by `rules.work_order` in `feature_list.json`. Each feature
+inherits its priority from its requirement, so if the ordering looks wrong, the
+thing to discuss is the requirement — not the feature.
 
-## 5. Cierre de sesión (lifecycle)
+## 5. Closing the session (lifecycle)
 
-Antes de terminar:
+Before finishing:
 
-1. Ejecuta el verificador — todo verde.
-2. Si la tarea está acabada y aprobada: marca `status: "done"` en `feature_list.json`.
-3. Mueve el resumen de `progress/current.md` al final de `progress/history.md`.
-4. Vacía `progress/current.md` dejando solo la plantilla.
-5. No dejes archivos temporales, ni `print()` de debug, ni TODOs sin contexto.
+1. Run the verifier — everything green.
+2. If the task is finished and approved: set `status: "done"` in
+   `feature_list.json`.
+3. Move the summary from `progress/current.md` to the end of
+   `progress/history.md`.
+4. Empty `progress/current.md`, leaving only the template.
+5. Leave no temporary files, no debug `print()` calls and no context-free TODOs.
 
-Atajo: `/close-session` hace este recorrido paso a paso.
+Shortcut: `/close-session` walks this path step by step.
 
-## 6. Si te bloqueas
+## 6. If you get stuck
 
-- Relee la sección relevante de `docs/`.
-- Si el que falla es un script del arnés, mira la tabla "cuando falla" de
-  `docs/scripts.md` antes de improvisar.
-- Si la herramienta no hace lo que esperas, **no inventes un workaround**:
-  documenta el bloqueo en `progress/current.md`, deja la feature en `blocked`
-  y para la sesión.
+- Re-read the relevant section of `docs/`.
+- If what fails is a harness script, look at the "when it fails" table in
+  `docs/scripts.md` before improvising.
+- If a tool does not do what you expect, **do not invent a workaround**:
+  document the blocker in `progress/current.md`, leave the feature `blocked`
+  and end the session.

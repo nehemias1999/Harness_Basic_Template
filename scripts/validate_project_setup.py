@@ -1,47 +1,47 @@
-"""Comprueba que el proyecto está configurado antes de dejar trabajar en él.
+"""Checks the project is configured before letting anyone work on it.
 
-Propósito
-    Un arnés sin configurar es peor que no tener arnés: el reviewer aprueba
-    contra `docs/architecture.md`, así que si ese archivo sigue lleno de
-    placeholders no hay criterio de calidad y cualquier código que pase los
-    tests se considera bueno. Este validador bloquea la sesión hasta que lo
-    imprescindible esté puesto.
+Purpose
+    An unconfigured harness is worse than no harness: the reviewer approves
+    against `docs/architecture.md`, so if that file is still full of
+    placeholders there are no quality criteria and any code that passes the
+    tests counts as good. This validator blocks the session until the
+    essentials are in place.
 
-Qué bloquea (`[FAIL]`)
-    - `feature_list.json` todavía con el placeholder de `project`.
-    - `docs/architecture.md` sin rellenar (placeholders `<...>` o la nota de
-      plantilla intacta) **si ya hay alguna feature fuera de `draft`**.
-    - `README.md` con placeholders sin sustituir.
+What it blocks (`[FAIL]`)
+    - `feature_list.json` still carrying the `project` placeholder.
+    - `docs/architecture.md` unfilled (`<...>` placeholders or the template note
+      still there) **if there is already a feature outside `draft`**.
+    - `README.md` with unreplaced placeholders.
 
-Por qué la arquitectura solo bloquea a veces
-    El borrador de `docs/architecture.md` lo escribe el agente `analyst` y lo
-    apruebas tú borrando su nota de plantilla. Mientras todas las features
-    están en `draft` nadie está programando, así que el borrador sin aprobar es
-    un `[WARN]`: si fuera `[FAIL]`, toda la fase de análisis correría en rojo y
-    el rojo dejaría de significar algo. En cuanto una feature sale de `draft`
-    vuelve a ser bloqueante, que es cuando importa: el reviewer necesita
-    criterio justo cuando hay código que juzgar.
+Why the architecture only blocks sometimes
+    The draft of `docs/architecture.md` is written by the `analyst` agent and
+    you approve it by removing its template note. While every feature is still
+    in `draft` nobody is programming, so an unapproved draft is a `[WARN]`: if
+    it were a `[FAIL]`, the whole analysis phase would run red and red would
+    stop meaning anything. As soon as a feature leaves `draft` it blocks again,
+    which is when it matters: the reviewer needs criteria exactly when there is
+    code to judge.
 
-Qué solo avisa (`[WARN]`)
-    - `docs/architecture.md` en borrador mientras todo esté en `draft`.
-    - `description` sin rellenar.
-    - `feature_list.json` sin features.
-    - `src/` sin módulos todavía.
+What it only warns about (`[WARN]`)
+    - `docs/architecture.md` still a draft while everything is in `draft`.
+    - `description` not filled in.
+    - `feature_list.json` with no features.
+    - `src/` with no modules yet.
 
-Caso especial
-    Si NADA está configurado, el repositorio es la plantilla recién copiada:
-    en vez de escupir todos los fallos, dice qué ejecutar (`bootstrap.ps1`).
+Special case
+    If NOTHING is configured, the repository is the freshly copied template:
+    instead of spitting out every failure, it says what to run (`bootstrap.ps1`).
 
-Quién lo ejecuta
-    `init.ps1` e `init.sh` (sección 3). Ambos usan este mismo módulo para que
-    las reglas no se desincronicen entre Windows y POSIX.
+Who runs it
+    `init.ps1` and `init.sh` (section 3). Both use this same module so the rules
+    do not drift apart between Windows and POSIX.
 
-Uso
-    python scripts/validate_project_setup.py [raiz_del_repo]
+Usage
+    python scripts/validate_project_setup.py [repo_root]
 
 Exit codes
-    0  configurado (los [WARN] no bloquean)
-    1  falta configuración imprescindible
+    0  configured (warnings do not block)
+    1  essential configuration is missing
 """
 from __future__ import annotations
 
@@ -50,12 +50,12 @@ import os
 import re
 import sys
 
-PROJECT_PLACEHOLDER = "<TU_PROYECTO>"
-DESCRIPTION_PLACEHOLDER = "<DESCRIPCION_PROYECTO>"
-TEMPLATE_MARKER = "Este archivo es una plantilla"
+PROJECT_PLACEHOLDER = "<YOUR_PROJECT>"
+DESCRIPTION_PLACEHOLDER = "<PROJECT_DESCRIPTION>"
+TEMPLATE_MARKER = "This file is a template"
 
-# Un placeholder es un token entre ángulos sin espacios raros: <modulo_1>,
-# <TU_PROYECTO>, <capa>. No cuenta el HTML de los comentarios ni las flechas.
+# A placeholder is a token between angle brackets with no odd spacing:
+# <module_1>, <YOUR_PROJECT>, <layer>. HTML comments and arrows do not count.
 PLACEHOLDER_RE = re.compile(r"<[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9_ .-]{0,40}>")
 HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 
@@ -66,12 +66,12 @@ def _read(path: str) -> str:
 
 
 def find_placeholders(text: str) -> list[str]:
-    """Placeholders del documento, ignorando los comentarios HTML de ayuda."""
+    """The document's placeholders, ignoring the helper HTML comments."""
     return sorted(set(PLACEHOLDER_RE.findall(HTML_COMMENT_RE.sub("", text))))
 
 
 def check(root: str) -> tuple[list[str], list[str], bool]:
-    """Devuelve (fallos, avisos, es_plantilla_sin_instanciar)."""
+    """Returns (failures, warnings, is_uninstantiated_template)."""
     fails: list[str] = []
     warns: list[str] = []
 
@@ -84,32 +84,31 @@ def check(root: str) -> tuple[list[str], list[str], bool]:
     try:
         data = json.loads(_read(path("feature_list.json")))
     except (OSError, json.JSONDecodeError) as exc:
-        fails.append(f"No se pudo leer feature_list.json: {exc}")
+        fails.append(f"Could not read feature_list.json: {exc}")
         data = {}
 
     project = str(data.get("project", "")).strip()
     if not project or project == PROJECT_PLACEHOLDER:
         project_unset = True
         fails.append(
-            'feature_list.json: "project" sigue sin rellenar '
-            f'(vale "{project or ""}")'
+            f'feature_list.json: "project" is still unset (it says "{project or ""}")'
         )
     else:
         description = str(data.get("description", "")).strip()
         if not description or description.startswith("<"):
-            warns.append('feature_list.json: "description" sin rellenar')
+            warns.append('feature_list.json: "description" is not filled in')
 
     features = data.get("features")
     if isinstance(features, list) and not features:
         features_empty = True
-        warns.append("feature_list.json: no hay ninguna feature definida todavía")
+        warns.append("feature_list.json: no feature has been defined yet")
 
     # --- docs/architecture.md ----------------------------------------------
     architecture_unset = False
     try:
         architecture = _read(path("docs", "architecture.md"))
     except OSError as exc:
-        fails.append(f"No se pudo leer docs/architecture.md: {exc}")
+        fails.append(f"Could not read docs/architecture.md: {exc}")
         architecture = ""
 
     architecture_issues: list[str] = []
@@ -118,43 +117,44 @@ def check(root: str) -> tuple[list[str], list[str], bool]:
         if TEMPLATE_MARKER in architecture:
             architecture_unset = True
             architecture_issues.append(
-                "docs/architecture.md sigue siendo la plantilla sin rellenar. "
-                "Léela y apruébala: python scripts/approve.py arquitectura"
+                "docs/architecture.md is still the unfilled template. "
+                "Read it and approve it: python scripts/approve.py architecture"
             )
         if placeholders:
             architecture_unset = True
             shown = ", ".join(placeholders[:6])
-            extra = f" (y {len(placeholders) - 6} más)" if len(placeholders) > 6 else ""
+            extra = f" (and {len(placeholders) - 6} more)" if len(placeholders) > 6 else ""
             architecture_issues.append(
-                f"docs/architecture.md tiene placeholders sin rellenar: {shown}{extra}"
+                f"docs/architecture.md has unfilled placeholders: {shown}{extra}"
             )
 
-    # La arquitectura sin aprobar solo bloquea cuando ya hay trabajo real: si
-    # todo sigue en `draft` estamos en fase de análisis y el rojo sobraría.
-    hay_trabajo = any(
+    # An unapproved architecture only blocks once there is real work: if
+    # everything is still in `draft` we are in the analysis phase and the red
+    # would be noise.
+    work_started = any(
         isinstance(f, dict) and f.get("status") not in (None, "draft")
         for f in (features if isinstance(features, list) else [])
     )
     if architecture_issues:
-        if hay_trabajo:
+        if work_started:
             fails.extend(architecture_issues)
         else:
             warns.extend(architecture_issues)
             warns.append(
-                "docs/architecture.md es un borrador sin aprobar; todavía no bloquea "
-                "porque no hay ninguna feature fuera de draft"
+                "docs/architecture.md is an unapproved draft; it does not block yet "
+                "because no feature has left draft"
             )
 
     # --- README.md ----------------------------------------------------------
     try:
         readme = _read(path("README.md"))
     except OSError as exc:
-        fails.append(f"No se pudo leer README.md: {exc}")
+        fails.append(f"Could not read README.md: {exc}")
         readme = ""
 
     for placeholder in (PROJECT_PLACEHOLDER, DESCRIPTION_PLACEHOLDER):
         if placeholder in readme:
-            fails.append(f"README.md todavía contiene {placeholder}")
+            fails.append(f"README.md still contains {placeholder}")
 
     # --- src/ ---------------------------------------------------------------
     src_dir = path("src")
@@ -162,7 +162,7 @@ def check(root: str) -> tuple[list[str], list[str], bool]:
     if os.path.isdir(src_dir):
         modules = [f for f in os.listdir(src_dir) if f.endswith(".py") and f != "__init__.py"]
     if not modules:
-        warns.append("src/ no tiene módulos todavía")
+        warns.append("src/ has no modules yet")
 
     pristine = project_unset and architecture_unset and features_empty and not modules
     return fails, warns, pristine
@@ -173,16 +173,17 @@ def main(argv: list[str]) -> int:
     fails, warns, pristine = check(root)
 
     if pristine:
-        print("[FAIL]  Este repositorio es la plantilla del arnés SIN INSTANCIAR.")
-        print("[FAIL]  No se puede trabajar en un proyecto que todavía no existe.")
+        print("[FAIL]  This repository is the harness template, NOT INSTANTIATED.")
+        print("[FAIL]  You cannot work on a project that does not exist yet.")
         print("")
-        print("        Instáncialo y vuelve a ejecutar el verificador:")
+        print("        Instantiate it and run the verifier again:")
         print("")
-        print('          ./bootstrap.ps1 -Name "mi-proyecto" -Description "Qué hace."')
+        print('          ./bootstrap.ps1 -Name "my-project" -Description "What it does."')
+        print('          ./bootstrap.sh --name "my-project" --description "What it does."')
         print("")
-        print("        Después pásale tus requisitos en lenguaje normal (/requirements):")
-        print("        el analyst los deja en specs/ y redacta docs/architecture.md,")
-        print("        y tú los apruebas. Ver README.md § Arranque rápido.")
+        print("        Then hand it your requirements in plain language (/requirements):")
+        print("        the analyst leaves them in specs/ and drafts docs/architecture.md,")
+        print("        and you approve them. See README.md § Quick start.")
         return 1
 
     for warn in warns:
@@ -191,10 +192,10 @@ def main(argv: list[str]) -> int:
         print(f"[FAIL]  {fail}")
 
     if fails:
-        print("[FAIL]  Configuración incompleta: resuélvela antes de trabajar.")
+        print("[FAIL]  Configuration is incomplete: sort it out before working.")
         return 1
 
-    print("[OK]    Proyecto configurado")
+    print("[OK]    Project configured")
     return 0
 
 

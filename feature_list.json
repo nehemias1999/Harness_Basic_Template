@@ -1,25 +1,25 @@
 {
-  "project": "<TU_PROYECTO>",
-  "description": "<Una línea describiendo qué hace el proyecto.>",
+  "project": "<YOUR_PROJECT>",
+  "description": "<One line describing what the project does.>",
   "rules": {
     "one_feature_at_a_time": true,
     "require_tests_to_close": true,
-    "orden_de_trabajo": "prioridad_luego_id",
+    "work_order": "priority_then_id",
     "valid_status": ["draft", "pending", "in_progress", "done", "blocked"]
   },
   "_example": {
-    "_comment": "Plantilla de una feature. Normalmente NO la escribes tú: la deriva el agente analyst desde un requisito de specs/ (usa /requirements). Los criterios de acceptance salen uno a uno de la sección 5 de su spec. Una feature nace en draft y solo pasa a pending cuando apruebas el requisito con /approve <id>: el implementer nunca toca una draft.",
+    "_comment": "Template for a feature. You normally do NOT write this yourself: the analyst agent derives it from a requirement in specs/ (use /requirements). The acceptance criteria come one by one from section 5 of its spec. A feature is born in draft and only moves to pending when you approve the requirement with /approve <id>: the implementer never touches a draft.",
     "id": 1,
-    "name": "nombre_corto_snake_case",
-    "title": "Título legible de la feature",
-    "description": "Qué hace y por qué, en 1-2 frases.",
-    "spec": "specs/REQ-001_nombre_del_requisito.md",
-    "prioridad": "alta",
+    "name": "short_snake_case_name",
+    "title": "Readable feature title",
+    "description": "What it does and why, in 1-2 sentences.",
+    "spec": "specs/REQ-001_requirement_name.md",
+    "priority": "high",
     "acceptance": [
-      "Existe src/<modulo>.py con la función <nombre>()",
-      "<comando concreto> produce <salida concreta>",
-      "Devuelve exit code != 0 y mensaje en stderr si <caso de error>",
-      "tests/test_<modulo>.py cubre camino feliz y al menos un camino de error"
+      "src/<module>.py exists with the <name>() function",
+      "<concrete command> produces <concrete output>",
+      "Returns exit code != 0 and a message on stderr if <error case>",
+      "tests/test_<module>.py covers the happy path and at least one error path"
     ],
     "status": "draft"
   },

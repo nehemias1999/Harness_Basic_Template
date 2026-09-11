@@ -1,30 +1,29 @@
 #!/usr/bin/env bash
-# init.sh — Verificación e inicialización del entorno (POSIX / WSL / CI Linux)
+# init.sh — Environment verification and setup (POSIX / WSL / Linux CI)
 #
-# Propósito : comprobar que el repositorio está en un estado sano antes de
-#             trabajar y antes de declarar cualquier feature como `done`.
-# Lo ejecuta: el agente al COMENZAR una sesión, el hook `Stop` (vía
-#             scripts/harness_hook.py) al cerrarla, y
-#             el reviewer antes de emitir su veredicto. Si falla, la sesión no avanza.
-# Equivalente: ./init.ps1 (canónico en Windows; misma salida y mismo exit code).
-# Parámetros : --quiet  resume la salida de los tests (equivale a -Quiet de init.ps1).
-# Uso        : ./init.sh [--quiet]
-# Salida     : bloques numerados con líneas [OK] / [WARN] / [FAIL].
-# Exit codes : 0 entorno listo (los [WARN] no bloquean) · 1 hay algo que resolver.
+# Purpose    : check the repository is in a healthy state before working and
+#              before declaring any feature `done`.
+# Who runs it: the agent when STARTING a session, the `Stop` hook (through
+#              scripts/harness_hook.py) when closing it, and the reviewer before
+#              issuing its verdict. If it fails, the session does not move on.
+# Equivalent : ./init.ps1 (canonical on Windows; same output, same exit code).
+# Parameters : --quiet  shortens the test output (same as init.ps1's -Quiet).
+# Usage      : ./init.sh [--quiet]
+# Output     : numbered blocks with [OK] / [WARN] / [FAIL] lines.
+# Exit codes : 0 environment ready (warnings do not block) · 1 something to fix.
 
 set -u
 
-# Como init.ps1: el verificador se planta en la raíz del repositorio. Sin esto,
-# ejecutarlo desde otro directorio reportaba los 8 archivos base como
-# "faltantes" en vez de verificar lo que había que verificar.
+# Like init.ps1: the verifier plants itself at the repository root. Without this,
+# running it from another directory reported the base files as "missing" instead
+# of verifying what had to be verified.
 cd "$(dirname "$0")" || exit 1
 
 QUIET=0
 for arg in "$@"; do
   case "$arg" in
     --quiet) QUIET=1 ;;
-    *) printf "Parámetro desconocido: %s (solo --quiet)
-" "$arg" >&2; exit 1 ;;
+    *) printf "Unknown parameter: %s (only --quiet)\n" "$arg" >&2; exit 1 ;;
   esac
 done
 
@@ -39,11 +38,11 @@ fail()  { printf "${RED}[FAIL]${NC}  %s\n" "$1"; }
 
 EXIT_CODE=0
 
-echo "── 1. Verificando entorno ─────────────────────────────"
+echo "── 1. Checking the environment ─────────────────────────"
 
-# Intérprete de Python: acepta cualquiera de los nombres habituales y descarta
-# los stubs que no ejecutan nada (p. ej. el alias `python3` de la Microsoft Store,
-# que existe en el PATH pero solo imprime un aviso de instalación).
+# Python interpreter: accepts any of the usual names and discards the stubs that
+# run nothing (for example the Microsoft Store's `python3` alias, which exists on
+# PATH but only prints an install notice).
 PY=""
 PY_VERSION=""
 for candidate in python3 python py; do
@@ -60,84 +59,84 @@ for candidate in python3 python py; do
 done
 
 if [ -z "$PY" ]; then
-  fail "No se encontró un Python ejecutable (probé python3, python, py)"
+  fail "No runnable Python found (tried python3, python, py)"
   exit 1
 fi
 ok "Python -> $PY $PY_VERSION"
 
-# Versión mínima 3.9 (dataclasses + sintaxis moderna de typing)
+# Minimum version 3.9 (dataclasses + modern typing syntax)
 if [ "$PY_OK" != "1" ]; then
-  fail "Se requiere Python >= 3.9 (encontrado $PY_VERSION)"
+  fail "Python >= 3.9 is required (found $PY_VERSION)"
   exit 1
 fi
-ok "Versión de Python compatible"
+ok "Compatible Python version"
 
 echo ""
-echo "── 2. Verificando archivos base del arnés ──────────────"
+echo "── 2. Checking the harness base files ──────────────────"
 
 for f in AGENTS.md CLAUDE.md CHECKPOINTS.md README.md feature_list.json \
-         progress/current.md progress/history.md specs/_plantilla_req.md \
+         progress/current.md progress/history.md specs/_req_template.md \
          docs/architecture.md docs/conventions.md docs/verification.md docs/scripts.md; do
   if [ ! -f "$f" ]; then
-    fail "Falta archivo base: $f"
+    fail "Base file missing: $f"
     EXIT_CODE=1
   else
-    ok "Existe $f"
+    ok "$f exists"
   fi
 done
 
 echo ""
-echo "── 3. Verificando configuración del proyecto ───────────"
+echo "── 3. Checking the project configuration ───────────────"
 
-# Bloqueante a propósito: un arnés sin configurar no tiene criterio de calidad
-# (el reviewer juzga contra docs/architecture.md). Ver docs/scripts.md.
+# Blocking on purpose: an unconfigured harness has no quality criteria (the
+# reviewer judges against docs/architecture.md). See docs/scripts.md.
 if [ -f "scripts/validate_project_setup.py" ]; then
   if ! $PY scripts/validate_project_setup.py .; then
     EXIT_CODE=1
   fi
 else
-  fail "Falta scripts/validate_project_setup.py — no se puede verificar la configuración"
+  fail "scripts/validate_project_setup.py is missing — cannot check the configuration"
   EXIT_CODE=1
 fi
 
 echo ""
-echo "── 4. Validando feature_list.json ──────────────────────"
+echo "── 4. Validating feature_list.json ─────────────────────"
 
 if [ -f "scripts/validate_feature_list.py" ]; then
   if ! $PY scripts/validate_feature_list.py feature_list.json; then
     EXIT_CODE=1
   fi
 else
-  fail "Falta scripts/validate_feature_list.py — no se puede validar el alcance"
+  fail "scripts/validate_feature_list.py is missing — cannot validate the scope"
   EXIT_CODE=1
 fi
 
 echo ""
-echo "── 5. Validando requisitos y trazabilidad ──────────────"
+echo "── 5. Validating requirements and traceability ─────────"
 
-# Bloqueante a propósito: la aprobación de un requisito no es un "dale" en el
-# chat, es `estado: aprobado` en specs/ mas la feature en `pending`. Mismo
-# módulo que usa init.ps1. Ver docs/scripts.md.
+# Blocking on purpose: approving a requirement is not a "sure" in the chat, it is
+# `status: approved` in specs/ plus the feature in `pending`. The same module
+# init.ps1 uses. See docs/scripts.md.
 if [ -f "scripts/validate_requirements.py" ]; then
   if ! $PY scripts/validate_requirements.py .; then
     EXIT_CODE=1
   fi
 else
-  fail "Falta scripts/validate_requirements.py — no se puede verificar la trazabilidad"
+  fail "scripts/validate_requirements.py is missing — cannot check traceability"
   EXIT_CODE=1
 fi
 
 echo ""
-echo "── 6. Ejecutando tests ─────────────────────────────────"
+echo "── 6. Running tests ────────────────────────────────────"
 
 if [ ! -d "tests" ]; then
-  warn "La carpeta tests/ no existe todavía"
+  warn "The tests/ folder does not exist yet"
 else
-  # Contar antes de ejecutar: un discover sin tests devuelve 0 y no debe
-  # confundirse con "todo verde". Un repo recién instanciado avisa, no falla.
-  # Se compara el exit code del conteo en vez de su salida: si Python imprime
-  # algo antes de fallar, una comparación de cadenas mandaría al verificador a
-  # ejecutar tests que no se pudieron ni descubrir (init.ps1 ya miraba el code).
+  # Count before running: a discover with no tests returns 0 and must not be
+  # mistaken for "all green". A freshly instantiated repo warns, it does not fail.
+  # The count's exit code is compared rather than its output: if Python prints
+  # something before failing, a string comparison would send the verifier off to
+  # run tests it could not even discover (init.ps1 already looked at the code).
   if TEST_COUNT=$($PY -c 'import unittest; print(unittest.TestLoader().discover("tests").countTestCases())' 2>/dev/null); then
     :
   else
@@ -145,10 +144,10 @@ else
   fi
 
   if [ "$TEST_COUNT" = "-1" ]; then
-    fail "No se pudieron descubrir los tests (¿error de import en tests/?)"
+    fail "Could not discover the tests (import error in tests/?)"
     EXIT_CODE=1
   elif [ "$TEST_COUNT" = "0" ]; then
-    warn "0 tests en tests/ — el arnés no está verificando nada todavía"
+    warn "0 tests in tests/ — the harness is not verifying anything yet"
   else
     if [ "$QUIET" -eq 1 ]; then
       TEST_FLAG="-q"
@@ -156,21 +155,21 @@ else
       TEST_FLAG="-v"
     fi
     if $PY -m unittest discover -s tests "$TEST_FLAG" 2>&1; then
-      ok "Todos los tests pasan ($TEST_COUNT tests)"
+      ok "All tests pass ($TEST_COUNT tests)"
     else
-      fail "Hay tests rotos"
+      fail "There are broken tests"
       EXIT_CODE=1
     fi
   fi
 fi
 
 echo ""
-echo "── 7. Resumen ──────────────────────────────────────────"
+echo "── 7. Summary ──────────────────────────────────────────"
 
 if [ $EXIT_CODE -eq 0 ]; then
-  ok "Entorno listo. Puedes empezar a trabajar."
+  ok "Environment ready. You can start working."
 else
-  fail "Entorno NO está listo. Resuelve los errores antes de avanzar."
+  fail "Environment NOT ready. Resolve the failures before moving on."
 fi
 
 exit $EXIT_CODE

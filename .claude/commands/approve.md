@@ -1,50 +1,51 @@
 ---
-description: Firma los requisitos que le nombres por id, y pasa sus features a pending.
+description: Signs the requirements you name by id, and moves their features to pending.
 argument-hint: 1 2 [architecture]
 ---
 
-El humano nombró qué aprobar: **`$ARGUMENTS`**. Convertí eso en estado
-verificable ejecutando:
+The human named what to approve: **`$ARGUMENTS`**. Turn that into verifiable
+state by running:
 
 ```bash
 python scripts/approve.py $ARGUMENTS
 ```
 
-Eso es todo lo que tenés que hacer. El script se ocupa de las cuatro cosas que
-hay que tocar a la vez —`estado: aprobado`, la fecha, la huella del contenido y
-el paso de sus features de `draft` a `pending`— y de la fila de la bitácora. No
-lo hagas a mano: a medio camino el repositorio queda incoherente, y es
-exactamente el tipo de trabajo mecánico en el que un agente se saltea un paso.
+That is all you have to do. The script takes care of the four things that have
+to be touched at once — `status: approved`, the date, the content fingerprint
+and moving its features from `draft` to `pending` — plus the change-log row. Do
+not do it by hand: halfway through, the repository is incoherent, and this is
+exactly the kind of mechanical work where an agent skips a step.
 
-**Qué acepta:**
+**What it accepts:**
 
-| Lo que escribe el humano | Qué firma |
+| What the human writes | What gets signed |
 |---|---|
-| `1 2` · `001 002` · `REQ-001` | esos requisitos |
-| `all` | todos los que estén en `draft` |
-| `architecture` | además, `docs/architecture.md` |
+| `1 2` · `001 002` · `REQ-001` | those requirements |
+| `all` | every requirement in `draft` |
+| `architecture` | additionally, `docs/architecture.md` |
 
-(`todos` y `arquitectura` también funcionan: el script es tolerante con la
-forma, igual que con los ids. Lo canónico es el inglés, como los comandos.)
+(`todos` and `arquitectura` work too: the script is forgiving about the form,
+just as it is with ids. English is canonical, like the commands.)
 
-`architecture` va aparte a propósito: es el criterio contra el que el reviewer
-juzga **todo** el código, y aprobarlo de rebote junto a un requisito sería el
-descuido que el arnés intenta evitar. Si el humano no lo nombró, no lo agregues
-vos.
+`architecture` goes separately on purpose: it is the criterion the reviewer
+judges **all** the code against, and approving it as a side effect of a
+requirement would be the oversight the harness is trying to prevent. If the
+human did not name it, do not add it yourself.
 
-**Después de que el script termine:**
+**Once the script finishes:**
 
-1. Ejecutá el verificador. Tiene que quedar verde salvo el `[WARN]` de 0 tests.
-2. Anotá en `progress/history.md` qué se aprobó.
-3. Decile cuál es la primera feature según prioridad —la imprime el propio
-   verificador en su sección 4— y si eso desplaza a una que esté `in_progress`,
-   dale las dos salidas: terminarla, o pasarla a `blocked` con motivo. **La
-   decisión de interrumpir es suya.**
+1. Run the verifier. It should be green except for the `[WARN]` about 0 tests.
+2. Record in `progress/history.md` what was approved.
+3. Tell them which feature comes first by priority — the verifier prints it in
+   its section 4 — and if that displaces one that is `in_progress`, give them
+   both ways out: finish it, or move it to `blocked` with a reason. **The
+   decision to interrupt is theirs.**
 
-**Si el script se niega**, no busques la vuelta: repetí el motivo tal cual. Se
-niega por tres razones, y las tres son buenas — el requisito tiene preguntas
-sin responder, ya estaba aprobado, o `docs/architecture.md` todavía tiene
-huecos. Ninguna se arregla editando el spec a mano.
+**If the script refuses**, do not look for a way around it: repeat the reason
+verbatim. It refuses for three reasons, and all three are good ones — the
+requirement has unanswered questions, it was already approved, or
+`docs/architecture.md` still has holes. None of them is fixed by editing the
+spec by hand.
 
-**Un "dale" en el chat no aprueba nada.** Lo que aprueba es este comando, con
-los ids escritos, y queda en git.
+**A "sure, go ahead" in the chat approves nothing.** What approves is this
+command, with the ids written out, and it lands in git.

@@ -1,8 +1,8 @@
-"""Tests de scripts/approve.py.
+"""Tests for scripts/approve.py.
 
-La firma toca cuatro cosas a la vez y a medio camino el repositorio queda
-incoherente. Lo que más importa cubrir es que no firme cuando no debe, y que
-cuando se niega **no haya escrito nada**.
+Signing touches four things at once and halfway through the repository is
+incoherent. What matters most to cover is that it does not sign when it must
+not, and that when it refuses **nothing has been written**.
 
     python -m unittest discover -s scripts/tests -v
 """
@@ -24,55 +24,55 @@ import validate_requirements as vr  # noqa: E402
 
 SPEC = """---
 id: {spec_id}
-titulo: Un requisito
-estado: {estado}
-prioridad: alta
-creado: 2026-09-01
-actualizado: 2026-09-01
-aprobado_el:
-aprobado_hash:
-ronda: 2
+title: A requirement
+status: {status}
+priority: high
+created: 2026-09-01
+updated: 2026-09-01
+approved_on:
+approved_hash:
+round: 2
 ---
 
-# {spec_id} — Un requisito
+# {spec_id} — A requirement
 
-## 5. Criterios de aceptación
+## 5. Acceptance criteria
 
-1. Hace algo verificable.
+1. Does something verifiable.
 
-## 6. Supuestos y preguntas abiertas
+## 6. Assumptions and open questions
 
-{preguntas}
+{questions}
 
-## 8. Bitácora de revisiones
+## 8. Change log
 
-| ronda | fecha | qué cambió | a pedido de |
-|-------|-------|-----------|-------------|
-| 1 | 2026-09-01 | versión inicial | humano |
+| round | date | what changed | requested by |
+|-------|------|--------------|--------------|
+| 1 | 2026-09-01 | initial version | human |
 """
 
-ARQUITECTURA_BORRADOR = """# Arquitectura
+ARCHITECTURE_DRAFT = """# Architecture
 
-> **Este archivo es una plantilla: rellénalo antes de escribir la primera feature.** — BORRADOR sin aprobar
+> **This file is a template: fill it in before writing the first feature.** — DRAFT, not approved
 
-## Principios
+## Principles
 
-1. Tres capas: cli, dominio, almacenamiento.
+1. Three layers: cli, domain, storage.
 """
 
 
-class AprobarCase(unittest.TestCase):
+class ApproveCase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.root = self._tmp.name
         os.makedirs(os.path.join(self.root, "specs"))
         os.makedirs(os.path.join(self.root, "docs"))
-        self.escribir("docs/architecture.md", ARQUITECTURA_BORRADOR)
-        self.spec("REQ-001", "req_uno")
+        self.write("docs/architecture.md", ARCHITECTURE_DRAFT)
+        self.spec("REQ-001", "req_one")
         self.features(
             [
-                self.feature(1, "una", "specs/REQ-001_req_uno.md"),
-                self.feature(2, "otra", "specs/REQ-001_req_uno.md"),
+                self.feature(1, "one", "specs/REQ-001_req_one.md"),
+                self.feature(2, "another", "specs/REQ-001_req_one.md"),
             ]
         )
 
@@ -80,181 +80,186 @@ class AprobarCase(unittest.TestCase):
         self._tmp.cleanup()
 
     # -- helpers ---------------------------------------------------------
-    def escribir(self, rel: str, contenido: str) -> None:
+    def write(self, rel: str, content: str) -> None:
         with open(os.path.join(self.root, rel), "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(contenido)
+            handle.write(content)
 
-    def leer(self, rel: str) -> str:
+    def read(self, rel: str) -> str:
         with open(os.path.join(self.root, rel), encoding="utf-8") as handle:
             return handle.read()
 
-    def spec(self, spec_id: str, nombre: str, estado: str = "draft",
-             preguntas: str = "- [x] **P1:** respondida") -> str:
-        rel = f"specs/{spec_id}_{nombre}.md"
-        self.escribir(rel, SPEC.format(spec_id=spec_id, estado=estado, preguntas=preguntas))
+    def spec(self, spec_id: str, name: str, status: str = "draft",
+             questions: str = "- [x] **Q1:** answered") -> str:
+        rel = f"specs/{spec_id}_{name}.md"
+        self.write(rel, SPEC.format(spec_id=spec_id, status=status, questions=questions))
         return rel
 
-    def feature(self, fid: int, nombre: str, spec: str, status: str = "draft") -> dict:
+    def feature(self, fid: int, name: str, spec: str, status: str = "draft") -> dict:
         return {
-            "id": fid, "name": nombre, "title": nombre, "description": "x",
-            "spec": spec, "prioridad": "alta", "acceptance": ["algo"], "status": status,
+            "id": fid, "name": name, "title": name, "description": "x",
+            "spec": spec, "priority": "high", "acceptance": ["something"], "status": status,
         }
 
-    def features(self, lista: list[dict]) -> None:
-        self.escribir(
+    def features(self, items: list[dict]) -> None:
+        self.write(
             "feature_list.json",
-            json.dumps({"project": "p", "rules": {}, "features": lista}, ensure_ascii=False),
+            json.dumps({"project": "p", "rules": {}, "features": items}, ensure_ascii=False),
         )
 
-    def estado_de_features(self) -> list[str]:
-        return [f["status"] for f in json.loads(self.leer("feature_list.json"))["features"]]
+    def feature_statuses(self) -> list[str]:
+        return [f["status"] for f in json.loads(self.read("feature_list.json"))["features"]]
 
-    def correr(self, *objetivos: str, dry_run: bool = False) -> tuple[int, str]:
-        salida = io.StringIO()
-        with redirect_stdout(salida):
-            code = approve.Aprobador(self.root, list(objetivos), dry_run, por="tester").ejecutar()
-        return code, salida.getvalue()
+    def run_approve(self, *targets: str, dry_run: bool = False) -> tuple[int, str]:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = approve.Approver(self.root, list(targets), dry_run, by="tester").run()
+        return code, output.getvalue()
 
 
-class TestFirma(AprobarCase):
-    def test_firma_por_id(self) -> None:
-        code, _ = self.correr("1")
+class TestSigning(ApproveCase):
+    def test_signs_by_id(self) -> None:
+        code, _ = self.run_approve("1")
         self.assertEqual(code, 0)
 
-        contenido = self.leer("specs/REQ-001_req_uno.md")
-        self.assertIn("estado: aprobado", contenido)
-        self.assertIn("aprobado_hash: ", contenido)
-        self.assertNotIn("aprobado_hash:\n", contenido)
-        self.assertEqual(self.estado_de_features(), ["pending", "pending"])
+        content = self.read("specs/REQ-001_req_one.md")
+        self.assertIn("status: approved", content)
+        self.assertIn("approved_hash: ", content)
+        self.assertNotIn("approved_hash:\n", content)
+        self.assertEqual(self.feature_statuses(), ["pending", "pending"])
 
-    def test_la_huella_escrita_es_la_que_valida(self) -> None:
-        self.correr("1")
-        contenido = self.leer("specs/REQ-001_req_uno.md")
-        campos, _ = vr.parse_frontmatter(contenido)
-        self.assertEqual(campos["aprobado_hash"], vr.huella_del_spec(contenido))
+    def test_the_written_fingerprint_is_the_one_that_validates(self) -> None:
+        self.run_approve("1")
+        content = self.read("specs/REQ-001_req_one.md")
+        fields, _ = vr.parse_frontmatter(content)
+        self.assertEqual(fields["approved_hash"], vr.spec_fingerprint(content))
 
-    def test_el_resultado_pasa_el_validador(self) -> None:
-        self.correr("1")
+    def test_the_result_passes_the_validator(self) -> None:
+        self.run_approve("1")
         fails, _warns = vr.check(self.root)
         self.assertEqual(fails, [])
 
-    def test_acepta_cualquier_forma_del_id(self) -> None:
-        for texto in ("1", "001", "REQ-001", "req-1"):
-            with self.subTest(texto=texto):
-                self.assertEqual(approve.normalizar_id(texto), "REQ-001")
+    def test_it_accepts_any_spelling_of_the_id(self) -> None:
+        for text in ("1", "001", "REQ-001", "req-1"):
+            with self.subTest(text=text):
+                self.assertEqual(approve.normalize_id(text), "REQ-001")
 
-    def test_todos_firma_los_draft(self) -> None:
-        self.spec("REQ-002", "req_dos")
-        self.spec("REQ-003", "req_tres", estado="aprobado")
-        code, salida = self.correr("todos")
+    def test_all_signs_the_drafts(self) -> None:
+        self.spec("REQ-002", "req_two")
+        self.spec("REQ-003", "req_three", status="approved")
+        code, output = self.run_approve("all")
         self.assertEqual(code, 0)
-        self.assertIn("REQ-001", salida)
-        self.assertIn("REQ-002", salida)
-        self.assertNotIn("REQ-003 ->", salida)
+        self.assertIn("REQ-001", output)
+        self.assertIn("REQ-002", output)
+        self.assertNotIn("REQ-003 ->", output)
 
-    def test_agrega_la_fila_de_la_bitacora_pegada_a_la_tabla(self) -> None:
-        self.correr("1")
-        lineas = [l for l in self.leer("specs/REQ-001_req_uno.md").splitlines() if l.startswith("|")]
-        self.assertEqual(len(lineas), 4)  # cabecera, separador, la vieja y la nueva
-        self.assertIn("tester", lineas[-1])
-
-    def test_dos_veces_el_mismo_id_no_lo_firma_dos_veces(self) -> None:
-        code, salida = self.correr("1", "001")
+    def test_the_spanish_keyword_still_works(self) -> None:
+        code, output = self.run_approve("todos")
         self.assertEqual(code, 0)
-        self.assertEqual(salida.count("REQ-001 -> aprobado"), 1)
+        self.assertIn("REQ-001", output)
 
+    def test_it_appends_the_log_row_attached_to_the_table(self) -> None:
+        self.run_approve("1")
+        rows = [l for l in self.read("specs/REQ-001_req_one.md").splitlines() if l.startswith("|")]
+        self.assertEqual(len(rows), 4)  # header, separator, the old one and the new one
+        self.assertIn("tester", rows[-1])
 
-class TestSeNiega(AprobarCase):
-    """Y cuando se niega, no escribe nada."""
-
-    def test_con_preguntas_abiertas(self) -> None:
-        self.spec("REQ-001", "req_uno", preguntas="- [ ] **P1:** ¿esto cómo era?")
-        antes = self.leer("specs/REQ-001_req_uno.md")
-
-        code, salida = self.correr("1")
-        self.assertEqual(code, 1)
-        self.assertIn("pregunta(s) sin responder", salida)
-        self.assertEqual(self.leer("specs/REQ-001_req_uno.md"), antes)
-        self.assertEqual(self.estado_de_features(), ["draft", "draft"])
-
-    def test_ya_aprobado(self) -> None:
-        self.spec("REQ-001", "req_uno", estado="aprobado")
-        code, salida = self.correr("1")
-        self.assertEqual(code, 1)
-        self.assertIn("ya estaba aprobado", salida)
-
-    def test_id_inexistente(self) -> None:
-        code, salida = self.correr("99")
-        self.assertEqual(code, 1)
-        self.assertIn("no existe ningún requisito", salida)
-
-    def test_palabra_que_no_es_nada(self) -> None:
-        code, salida = self.correr("dale")
-        self.assertEqual(code, 1)
-        self.assertIn("no entiendo", salida)
-
-    def test_un_id_malo_no_firma_el_bueno(self) -> None:
-        # Todo o nada: firmar la mitad deja un estado que nadie pidió.
-        self.spec("REQ-002", "req_dos")
-        code, _salida = self.correr("1", "99")
-        self.assertEqual(code, 1)
-        self.assertIn("estado: draft", self.leer("specs/REQ-001_req_uno.md"))
-
-    def test_spec_mal_formado_frena_todo(self) -> None:
-        self.escribir("specs/REQ-009_roto.md", "sin frontmatter\n")
-        code, salida = self.correr("1")
-        self.assertEqual(code, 1)
-        self.assertIn("arreglalos antes de aprobar", salida)
-
-
-class TestArquitectura(AprobarCase):
-    def test_se_nombra_aparte(self) -> None:
-        self.correr("1")
-        # Firmar un requisito no toca la arquitectura.
-        self.assertIn(approve.MARCADOR_PLANTILLA, self.leer("docs/architecture.md"))
-
-    def test_firma_la_arquitectura(self) -> None:
-        code, _ = self.correr("1", "arquitectura")
+    def test_the_same_id_twice_is_not_signed_twice(self) -> None:
+        code, output = self.run_approve("1", "001")
         self.assertEqual(code, 0)
-        self.assertNotIn(approve.MARCADOR_PLANTILLA, self.leer("docs/architecture.md"))
+        self.assertEqual(output.count("REQ-001 -> approved"), 1)
 
-    def test_con_huecos_no_firma_nada(self) -> None:
-        self.escribir(
+
+class TestItRefuses(ApproveCase):
+    """And when it refuses, it writes nothing."""
+
+    def test_with_open_questions(self) -> None:
+        self.spec("REQ-001", "req_one", questions="- [ ] **Q1:** how was this again?")
+        before = self.read("specs/REQ-001_req_one.md")
+
+        code, output = self.run_approve("1")
+        self.assertEqual(code, 1)
+        self.assertIn("unanswered", output)
+        self.assertEqual(self.read("specs/REQ-001_req_one.md"), before)
+        self.assertEqual(self.feature_statuses(), ["draft", "draft"])
+
+    def test_already_approved(self) -> None:
+        self.spec("REQ-001", "req_one", status="approved")
+        code, output = self.run_approve("1")
+        self.assertEqual(code, 1)
+        self.assertIn("was already approved", output)
+
+    def test_a_nonexistent_id(self) -> None:
+        code, output = self.run_approve("99")
+        self.assertEqual(code, 1)
+        self.assertIn("there is no requirement", output)
+
+    def test_a_word_that_means_nothing(self) -> None:
+        code, output = self.run_approve("whatever")
+        self.assertEqual(code, 1)
+        self.assertIn("I do not understand", output)
+
+    def test_one_bad_id_does_not_sign_the_good_one(self) -> None:
+        # All or nothing: signing half leaves a state nobody asked for.
+        self.spec("REQ-002", "req_two")
+        code, _output = self.run_approve("1", "99")
+        self.assertEqual(code, 1)
+        self.assertIn("status: draft", self.read("specs/REQ-001_req_one.md"))
+
+    def test_a_malformed_spec_stops_everything(self) -> None:
+        self.write("specs/REQ-009_broken.md", "no front matter\n")
+        code, output = self.run_approve("1")
+        self.assertEqual(code, 1)
+        self.assertIn("fix them before approving", output)
+
+
+class TestArchitecture(ApproveCase):
+    def test_it_is_named_separately(self) -> None:
+        self.run_approve("1")
+        # Signing a requirement does not touch the architecture.
+        self.assertIn(approve.TEMPLATE_MARKER, self.read("docs/architecture.md"))
+
+    def test_it_signs_the_architecture(self) -> None:
+        code, _ = self.run_approve("1", "architecture")
+        self.assertEqual(code, 0)
+        self.assertNotIn(approve.TEMPLATE_MARKER, self.read("docs/architecture.md"))
+
+    def test_with_holes_it_signs_nothing(self) -> None:
+        self.write(
             "docs/architecture.md",
-            ARQUITECTURA_BORRADOR + "\n2. Capas: <modulo_1>, <modulo_2>.\n",
+            ARCHITECTURE_DRAFT + "\n2. Layers: <module_1>, <module_2>.\n",
         )
-        code, salida = self.correr("1", "arquitectura")
+        code, output = self.run_approve("1", "architecture")
         self.assertEqual(code, 1)
-        self.assertIn("placeholders sin rellenar", salida)
-        # Y el requisito tampoco se firmó.
-        self.assertIn("estado: draft", self.leer("specs/REQ-001_req_uno.md"))
+        self.assertIn("unfilled placeholders", output)
+        # And the requirement was not signed either.
+        self.assertIn("status: draft", self.read("specs/REQ-001_req_one.md"))
 
-    def test_arquitectura_ya_aprobada_solo_avisa(self) -> None:
-        self.escribir("docs/architecture.md", "# Arquitectura\n\n1. Tres capas.\n")
-        code, salida = self.correr("arquitectura")
+    def test_an_already_approved_architecture_only_warns(self) -> None:
+        self.write("docs/architecture.md", "# Architecture\n\n1. Three layers.\n")
+        code, output = self.run_approve("architecture")
         self.assertEqual(code, 0)
-        self.assertIn("ya estaba aprobada", salida)
+        self.assertIn("was already approved", output)
 
 
-class TestSimulacro(AprobarCase):
-    def test_dry_run_no_escribe(self) -> None:
-        antes_spec = self.leer("specs/REQ-001_req_uno.md")
-        antes_json = self.leer("feature_list.json")
+class TestDryRun(ApproveCase):
+    def test_dry_run_writes_nothing(self) -> None:
+        spec_before = self.read("specs/REQ-001_req_one.md")
+        json_before = self.read("feature_list.json")
 
-        code, salida = self.correr("todos", "arquitectura", dry_run=True)
+        code, output = self.run_approve("all", "architecture", dry_run=True)
         self.assertEqual(code, 0)
-        self.assertIn("simulado", salida)
-        self.assertEqual(self.leer("specs/REQ-001_req_uno.md"), antes_spec)
-        self.assertEqual(self.leer("feature_list.json"), antes_json)
-        self.assertIn(approve.MARCADOR_PLANTILLA, self.leer("docs/architecture.md"))
+        self.assertIn("simulated", output)
+        self.assertEqual(self.read("specs/REQ-001_req_one.md"), spec_before)
+        self.assertEqual(self.read("feature_list.json"), json_before)
+        self.assertIn(approve.TEMPLATE_MARKER, self.read("docs/architecture.md"))
 
 
-class TestNadaQueAprobar(AprobarCase):
-    def test_sin_drafts_avisa_y_no_falla(self) -> None:
-        self.spec("REQ-001", "req_uno", estado="aprobado")
-        code, salida = self.correr("todos")
+class TestNothingToApprove(ApproveCase):
+    def test_with_no_drafts_it_warns_and_does_not_fail(self) -> None:
+        self.spec("REQ-001", "req_one", status="approved")
+        code, output = self.run_approve("all")
         self.assertEqual(code, 0)
-        self.assertIn("no hay nada que aprobar", salida)
+        self.assertIn("nothing to approve", output)
 
 
 if __name__ == "__main__":
