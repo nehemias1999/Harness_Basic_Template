@@ -500,6 +500,26 @@ afterwards. It is not a lock. If you need a lock, the approval has to move
 somewhere the agent cannot reach at all — a signed commit, or a human running
 the script outside the session.
 
+Two more limits of the same family, worth knowing before you rely on a green
+verifier as proof that the scope is what you signed:
+
+**One signature authorises the requirement, not a fixed amount of work.** The
+only check binding a feature to its requirement is that the requirement is
+approved (`validate_requirements.py`). Nothing verifies that a feature's
+`acceptance` was actually derived from §5 of its spec — §7 is excluded from the
+fingerprint, and `_req_template.md` says outright that the table is not
+validated. So more features can be hung off an already-approved REQ, with
+different acceptance criteria, and everything stays green. **This is the one to
+watch by eye**, because it is the least visible: the verifier will happily report
+`1 requirements (1 approved), 9 features traced`. Read the feature list after an
+approval round, not just the specs.
+
+**Status is a value, not a state machine.** No transition is validated — only the
+final value. `draft` straight to `done` is legal as long as the two reports exist
+and the spec is approved. `closing_reports()` makes the review artefact a hard
+requirement, so the close leaves a trail in git; it does not make the trail
+*true*, and the module says so in its own docstring.
+
 Exit codes: `0` signed (or simulated) · `1` nothing was signed, and the reason
 is printed.
 
