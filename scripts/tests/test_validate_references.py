@@ -87,9 +87,16 @@ class TestReferences(ReferencesCase):
         )
         self.assertEqual(self.check(), [])
 
-    def test_unreadable_feature_list_does_not_explode(self) -> None:
+    def test_an_unreadable_feature_list_is_reported_not_swallowed(self) -> None:
+        # This used to assert `== []`: the validator returned early and `main`
+        # went on to print "[OK] no dangling references" while half the check had
+        # not run. Not exploding is the right instinct; staying quiet about it is
+        # not. A validator that reports success when it could not look is worse
+        # than no validator, because someone trusts it.
         self.write("feature_list.json", "{ broken")
-        self.assertEqual(self.check(), [])
+        failures = self.check()
+        self.assertEqual(len(failures), 1)
+        self.assertIn("cannot be read", failures[0])
 
 
 class TestTheRealRepo(unittest.TestCase):

@@ -64,6 +64,45 @@ WITH_PLACEHOLDERS = (
 REPORT_RE = re.compile(r"^(explore|impl|review|intake)_.*\.md$")
 SPEC_RE = re.compile(r"^REQ-\d{3}_.*\.md$")
 
+# What a harness workspace looks like from outside. Used to refuse a `--root`
+# that points somewhere else: these two scripts delete whole directory trees, and
+# `--root` is a hidden flag the POSIX wrappers pass straight through from `"$@"`.
+# Before this check, `./reset.sh --name x --root ~/Documents` was a valid way to
+# empty ~/Documents — with no git there, no precondition objected and no backup
+# was taken.
+ROOT_FINGERPRINT = ("AGENTS.md", "feature_list.json", "progress")
+
+# A real session entry in `progress/history.md`: `## 2026-09-14 — feature 3 x`.
+# This used to be `"## " in history.split("---", 2)[-1]`, which asked "is there a
+# heading after the second horizontal rule?" — and `/close-session` invites
+# free-form notes, so an entry containing its own `---` shifted the accounting.
+# A file that happened to end in a rule read as empty, and the append-only
+# memory of the project was overwritten with no --force and no warning.
+SESSION_ENTRY_RE = re.compile(r"^##\s+\d{4}-\d{2}-\d{2}", re.MULTILINE)
+
+
+def refuse_foreign_root(root: str) -> str | None:
+    """Why `root` must not be reset or instantiated over, or None if it may be.
+
+    Deliberately structural rather than a path comparison: a legitimate workspace
+    is a *copy* of the harness living anywhere, so "is it this repository?" is the
+    wrong question. "Does it carry the harness's own files?" is the right one.
+    """
+    if not os.path.isdir(root):
+        return f"--root points at {root}, which is not a directory."
+    missing = [
+        name for name in ROOT_FINGERPRINT
+        if not os.path.exists(os.path.join(root, name))
+    ]
+    if missing:
+        return (
+            f"{os.path.abspath(root)} does not look like a harness workspace: "
+            f"{', '.join(missing)} missing.\n"
+            f"        Refusing to touch it. This script deletes entire trees, and "
+            f"a wrong --root is how that happens to the wrong folder."
+        )
+    return None
+
 # The two remotes the workspace ends up with. `origin` is the project's own
 # repository and `template` is the harness's. Knowing which is which used to be
 # a guess — "does the URL contain Harness_Basic_Template?" — which missed a fork
@@ -185,7 +224,11 @@ class Instantiator:
         reasons: list[str] = []
         try:
             project = str(json.loads(self.read("feature_list.json")).get("project", "")).strip()
-        except (OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError) as exc:
+            # Not swallowed into "no project". An unreadable feature_list.json
+            # is a damaged workspace, which is exactly when overwriting it is
+            # worst — the guard used to go quiet at the moment it mattered most.
+            reasons.append(f"feature_list.json cannot be read ({exc}), so this may be a live project")
             project = ""
         if project and project != PROJECT_PLACEHOLDER:
             reasons.append(f"feature_list.json already belongs to project '{project}'")
@@ -193,7 +236,36 @@ class Instantiator:
         specs = self.inherited_requirements()
         if specs:
             reasons.append(f"there are {len(specs)} requirement(s) in specs/")
+
+        # Two more signals of a live project. Neither is implied by the two
+        # above: a workspace can be mid-setup, unnamed and without specs, and
+        # still hold a month of code.
+        modules = self.code_in_src()
+        if modules:
+            reasons.append(f"there are {len(modules)} source file(s) in src/")
+
+        try:
+            if SESSION_ENTRY_RE.search(self.read("progress/history.md")):
+                reasons.append("progress/history.md records previous sessions")
+        except OSError:
+            pass
+
         return reasons
+
+    def code_in_src(self) -> list[str]:
+        """Source files under src/, recursively — any language, not just Python."""
+        src_dir = self.path("src")
+        if not os.path.isdir(src_dir):
+            return []
+        found: list[str] = []
+        for folder, dirs, names in os.walk(src_dir):
+            dirs[:] = [d for d in dirs if d != "__pycache__"]
+            found.extend(
+                os.path.relpath(os.path.join(folder, n), src_dir)
+                for n in names
+                if not n.startswith(".")
+            )
+        return sorted(found)
 
     def inherited_requirements(self) -> list[str]:
         spec_dir = self.path("specs")
@@ -228,16 +300,19 @@ class Instantiator:
 
     def reset_progress(self) -> None:
         history = self.read("progress/history.md")
-        has_entries = "## " in history.split("---", 2)[-1]
+        has_entries = bool(SESSION_ENTRY_RE.search(history))
         if has_entries and not self.args.force:
             warn(
                 "progress/history.md has entries from previous sessions. "
                 "Use --force to reset it."
             )
-        else:
-            self.write("progress/history.md", HISTORY_TEMPLATE)
-            self.announce("progress/history.md -> reset")
+            # `current.md` is spared for the same reason: it holds the live
+            # session, and resetting it while refusing to reset the history was
+            # half a decision.
+            return
 
+        self.write("progress/history.md", HISTORY_TEMPLATE)
+        self.announce("progress/history.md -> reset")
         self.write("progress/current.md", CURRENT_TEMPLATE)
         self.announce("progress/current.md -> reset")
 
@@ -486,6 +561,11 @@ def main(argv: list[str]) -> int:
 
     if not args.name.strip():
         fail("--name cannot be empty")
+        return 1
+
+    problem = refuse_foreign_root(args.root)
+    if problem:
+        fail(problem)
         return 1
 
     return Instantiator(args.root, args).run()

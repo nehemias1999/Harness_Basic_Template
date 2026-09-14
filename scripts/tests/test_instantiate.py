@@ -37,8 +37,11 @@ class InstantiateCase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.root = self._tmp.name
-        for folder in ("progress", "docs", "specs"):
+        for folder in ("progress", "docs", "specs", "src"):
             os.makedirs(os.path.join(self.root, folder))
+        # AGENTS.md is part of what `refuse_foreign_root` recognises a harness
+        # workspace by, so the fixture has to look like one.
+        self.write("AGENTS.md", "# AGENTS\n")
         self.write("feature_list.json", json.dumps(TEMPLATE_FEATURE_LIST, ensure_ascii=False))
         self.write("README.md", "# <YOUR_PROJECT>\n\n> <PROJECT_DESCRIPTION>\n")
         self.write("docs/architecture.md", "# Architecture of <YOUR_PROJECT>\n")
@@ -132,13 +135,68 @@ class TestDoNotDestroyALiveProject(InstantiateCase):
         self.assertFalse(self.exists("specs/REQ-001_something.md"))
 
     def test_a_history_with_entries_is_not_overwritten_without_force(self) -> None:
+        # Recorded sessions now refuse the whole instantiation, not just the
+        # history file. A workspace with a month of sessions behind it is a live
+        # project however empty feature_list.json happens to look.
         self.write(
             "progress/history.md",
             "# History\n\n---\n\n## 2026-01-01 — feature 1 something\n\n- Result: done\n",
         )
-        _code, output = self.run_it()
-        self.assertIn("has entries from previous sessions", output)
+        code, output = self.run_it()
+        self.assertEqual(code, 1)
+        self.assertIn("records previous sessions", output)
         self.assertIn("2026-01-01", self.read("progress/history.md"))
+
+    def test_a_history_entry_is_found_even_after_its_own_horizontal_rule(self) -> None:
+        # The old check asked "is there a heading after the second `---`?", and
+        # /close-session invites free-form notes. An entry carrying its own rule
+        # shifted the accounting, and a file ending in one read as empty — which
+        # silently overwrote the append-only memory of the project.
+        self.write(
+            "progress/history.md",
+            "# History\n\n---\n\n## 2026-01-01 — feature 1 x\n\n- Notes:\n\n---\n",
+        )
+        code, output = self.run_it()
+        self.assertEqual(code, 1)
+        self.assertIn("records previous sessions", output)
+
+    def test_code_in_src_counts_as_a_live_project(self) -> None:
+        # Neither implied by the other signals: a workspace can be unnamed and
+        # specless and still hold weeks of code.
+        self.write("src/app.py", "print('hello')\n")
+        code, output = self.run_it()
+        self.assertEqual(code, 1)
+        self.assertIn("source file(s) in src/", output)
+        self.assertTrue(self.exists("src/app.py"))
+
+    def test_an_unreadable_feature_list_is_a_reason_to_stop_not_to_proceed(self) -> None:
+        # The guard used to swallow the parse error into "no project", going
+        # quiet exactly when the workspace was damaged.
+        self.write("feature_list.json", "{ this is not json")
+        code, output = self.run_it()
+        self.assertEqual(code, 1)
+        self.assertIn("cannot be read", output)
+
+
+class TestForeignRoot(InstantiateCase):
+    """`--root` is hidden and the POSIX wrappers pass it straight through."""
+
+    def test_a_folder_that_is_not_a_harness_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as outsider:
+            with open(os.path.join(outsider, "thesis.txt"), "w") as handle:
+                handle.write("a year of work\n")
+
+            self.assertIsNotNone(instantiate.refuse_foreign_root(outsider))
+            # And nothing was touched by the asking.
+            self.assertTrue(os.path.isfile(os.path.join(outsider, "thesis.txt")))
+
+    def test_a_missing_directory_is_refused(self) -> None:
+        self.assertIsNotNone(
+            instantiate.refuse_foreign_root(os.path.join(self.root, "nowhere"))
+        )
+
+    def test_a_real_workspace_is_allowed(self) -> None:
+        self.assertIsNone(instantiate.refuse_foreign_root(self.root))
 
 
 class TestDryRun(InstantiateCase):

@@ -95,15 +95,21 @@ Set-Location -Path $PSScriptRoot
 
 # Same probe as init.ps1: the stubs that exist on PATH but run nothing have to
 # be discarded (the Microsoft Store's `python3` alias, for example).
+# Same candidate order and the same >= 3.9 gate as the verifier — see the note
+# in bootstrap.ps1.
 $Py = $null
-foreach ($candidate in @("python", "py", "python3")) {
+foreach ($candidate in @("python3", "python", "py")) {
     if (-not (Get-Command $candidate -ErrorAction SilentlyContinue)) { continue }
-    $probe = & $candidate -c "print('PYOK')" 2>$null
-    if ($LASTEXITCODE -eq 0 -and ([string]$probe).Trim() -eq "PYOK") { $Py = $candidate; break }
+    $probe = & $candidate -c "import sys;print('PYOK', int(sys.version_info >= (3, 9)))" 2>$null
+    $parts = ([string]$probe).Trim().Split(" ")
+    if ($parts[0] -ne "PYOK") { continue }
+    if ($parts[1] -ne "1") { continue }
+    $Py = $candidate
+    break
 }
 
 if (-not $Py) {
-    Write-Host "[FAIL]  No runnable Python found: the harness needs it (see docs/scripts.md)" -ForegroundColor Red
+    Write-Host "[FAIL]  No runnable Python >= 3.9 found: the harness needs it (see docs/scripts.md)" -ForegroundColor Red
     exit 1
 }
 

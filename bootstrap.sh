@@ -26,10 +26,11 @@ set -u
 
 cd "$(dirname "$0")" || exit 1
 
+# Same >= 3.9 gate as the verifier — see the note in reset.sh.
 PY=""
 for candidate in python3 python py; do
   if command -v "$candidate" >/dev/null 2>&1; then
-    if [ "$($candidate -c 'print("PYOK")' 2>/dev/null)" = "PYOK" ]; then
+    if [ "$($candidate -c 'import sys; print("PYOK" if sys.version_info >= (3, 9) else "OLD")' 2>/dev/null)" = "PYOK" ]; then
       PY="$candidate"
       break
     fi
@@ -37,7 +38,7 @@ for candidate in python3 python py; do
 done
 
 if [ -z "$PY" ]; then
-  printf "[FAIL]  No runnable Python found: the harness needs it (see docs/scripts.md)\n" >&2
+  printf "[FAIL]  No runnable Python >= 3.9 found: the harness needs it (see docs/scripts.md)\n" >&2
   exit 1
 fi
 

@@ -45,6 +45,18 @@ DOCUMENTS = (
     "docs/architecture.md",
     "docs/conventions.md",
     "docs/verification.md",
+    # The files subagents actually navigate by. They were missing, which is odd
+    # for a check whose whole point is that agents improvise when the map lies.
+    ".claude/agents/leader.md",
+    ".claude/agents/analyst.md",
+    ".claude/agents/implementer.md",
+    ".claude/agents/reviewer.md",
+    ".claude/commands/requirements.md",
+    ".claude/commands/approve.md",
+    ".claude/commands/approve-all.md",
+    ".claude/commands/next-feature.md",
+    ".claude/commands/close-session.md",
+    ".claude/commands/harness-check.md",
 )
 
 PATH_RE = re.compile(r"`([A-Za-z0-9_./-]+\.(?:md|py|ps1|sh|json|yml|yaml))`")
@@ -53,8 +65,34 @@ PATH_RE = re.compile(r"`([A-Za-z0-9_./-]+\.(?:md|py|ps1|sh|json|yml|yaml))`")
 # of examples is not a path.
 NO_FOLDER_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
+# …with one exception: the harness's own root-level files. Skipping every mention
+# without a `/` meant `init.sh`, `bootstrap.ps1`, `reset.sh` and `AGENTS.md` — the
+# entry points the documentation sends agents to — were the only files the
+# validator structurally could not check, while CHECKPOINTS.md C1 claimed every
+# mentioned path was verified.
+ROOT_FILES = frozenset({
+    "AGENTS.md",
+    "CLAUDE.md",
+    "CHECKPOINTS.md",
+    "README.md",
+    "feature_list.json",
+    "init.ps1",
+    "init.sh",
+    "bootstrap.ps1",
+    "bootstrap.sh",
+    "reset.ps1",
+    "reset.sh",
+})
+
 # `requirements.txt` shows up in CHECKPOINTS.md as something that must NOT exist.
 IGNORED = {"requirements.txt"}
+
+# Session artefacts. A mention of `progress/impl_storage.md` is a naming
+# convention being explained, not a map reference: those files are written during
+# a session and a fresh template has none of them. Only the two files that ship
+# with the template are real references.
+TRANSIENT_DIR = "progress/"
+PERMANENT_PROGRESS = {"progress/current.md", "progress/history.md"}
 
 
 def _read(path: str) -> str:
@@ -74,7 +112,9 @@ def check(root: str) -> list[str]:
         for mention in sorted(set(PATH_RE.findall(_read(doc_path)))):
             if mention in IGNORED or "<" in mention:
                 continue
-            if NO_FOLDER_RE.match(mention):
+            if NO_FOLDER_RE.match(mention) and mention not in ROOT_FILES:
+                continue
+            if mention.startswith(TRANSIENT_DIR) and mention not in PERMANENT_PROGRESS:
                 continue
             if os.path.exists(os.path.join(root, mention)):
                 continue
@@ -83,7 +123,15 @@ def check(root: str) -> list[str]:
     # Each feature's pointer to its requirement.
     try:
         data = json.loads(_read(os.path.join(root, "feature_list.json")))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as exc:
+        # Reported, not swallowed. This used to `return failures`, so an
+        # unreadable feature_list.json printed "[OK] no dangling references"
+        # while half the check had silently not run — a validator that says
+        # nothing is wrong when it could not look is worse than no validator.
+        failures.append(
+            f"feature_list.json cannot be read ({exc}), so no feature -> spec "
+            f"pointer could be checked"
+        )
         return failures
 
     for feature in data.get("features") or []:
