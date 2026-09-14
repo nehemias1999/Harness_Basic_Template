@@ -212,17 +212,25 @@ def event_post_edit(tests_dir: str) -> int:
 # The files that decide whether the work is any good. An agent that sees red
 # does not fix the red by editing the validator, and that temptation is not
 # resolved by asking nicely in a .md.
+#
+# Lowercase on purpose: `protected_path` folds the case before comparing. NTFS
+# is case-insensitive, so `Scripts/validate_requirements.py` used to sail past a
+# case-sensitive comparison and write the very same file.
 PROTECTED_ZONE = (
     ".claude/",
     "scripts/",
     "schema/",
+    ".github/",
     "init.ps1",
     "init.sh",
     "bootstrap.ps1",
     "bootstrap.sh",
-    "AGENTS.md",
-    "CLAUDE.md",
-    "CHECKPOINTS.md",
+    "reset.ps1",
+    "reset.sh",
+    "agents.md",
+    "claude.md",
+    "checkpoints.md",
+    ".harness-maintenance",
 )
 
 MAINTENANCE_MARK = ".harness-maintenance"
@@ -264,7 +272,13 @@ def in_maintenance() -> bool:
 
 
 def protected_path(path: str) -> str | None:
-    """Returns the protected prefix `path` touches, or None."""
+    """Returns the protected prefix `path` touches, or None.
+
+    The comparison is case-insensitive because the filesystems this runs on
+    mostly are. On NTFS `Scripts/x.py` and `scripts/x.py` are the same file, and
+    a case-sensitive check protected only one of the two spellings — which is to
+    say it protected neither.
+    """
     if not path:
         return None
     normalized = path.replace("\\", "/")
@@ -277,10 +291,24 @@ def protected_path(path: str) -> str | None:
         relative = normalized
     if relative.startswith(".."):
         return None
+    relative = relative.lower()
     for prefix in PROTECTED_ZONE:
-        if relative == prefix or relative.startswith(prefix):
+        # A bare `scripts` names the directory just as `scripts/` does, and
+        # `mv scripts scripts_old` used to slip through on that distinction.
+        if relative == prefix or relative == prefix.rstrip("/") or relative.startswith(prefix):
             return prefix
     return None
+
+
+def _mark_reason() -> str:
+    return (
+        f"[harness] {MAINTENANCE_MARK} is the switch that disarms this guard, so "
+        f"the guard does not let a tool create it: otherwise declaring maintenance "
+        f"would cost one write and mean nothing.\n"
+        f"If you are maintaining the harness, ask the human to create it from "
+        f"their own shell (in Claude Code: `! type nul > {MAINTENANCE_MARK}` on "
+        f"Windows, `! touch {MAINTENANCE_MARK}` on POSIX). Deleting it is allowed."
+    )
 
 
 def _reason(target: str) -> str:
@@ -301,12 +329,22 @@ def event_pre_tool_use() -> int:
     if not isinstance(data, dict):
         return PASS
 
+    if tool in WRITING_TOOLS:
+        target = str(data.get("file_path", ""))
+        # The mark is refused BEFORE `in_maintenance()` is consulted, and refused
+        # even while maintenance is open. A door the agent can install for itself
+        # is not a door: it used to take one allowed `Write` to disarm every
+        # protection below, and a second one to remove the evidence.
+        # Deleting it only re-arms the guard, so that stays allowed.
+        if protected_path(target) == MAINTENANCE_MARK:
+            return _block(_mark_reason())
+        if in_maintenance():
+            return PASS
+        prefix = protected_path(target)
+        return _block(_reason(prefix)) if prefix else PASS
+
     if in_maintenance():
         return PASS
-
-    if tool in WRITING_TOOLS:
-        prefix = protected_path(str(data.get("file_path", "")))
-        return _block(_reason(prefix)) if prefix else PASS
 
     if tool in ("Bash", "PowerShell"):
         command = NULL_REDIRECTS.sub(" ", str(data.get("command", "")).replace("\\", "/"))

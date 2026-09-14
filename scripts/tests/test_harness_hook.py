@@ -9,6 +9,7 @@ harness whose hooks do not block gives a sense of control that does not exist.
 from __future__ import annotations
 
 import io
+import json
 import os
 import sys
 import tempfile
@@ -326,6 +327,82 @@ class TestPreToolUse(unittest.TestCase):
 
     def test_a_path_outside_the_repo_is_none_of_its_business(self) -> None:
         self.assertEqual(self._write("/tmp/other/scripts/thing.py")[0], hh.PASS)
+
+    def test_the_case_of_the_path_does_not_let_it_through(self) -> None:
+        # NTFS is case-insensitive: `Scripts/x.py` and `scripts/x.py` are the
+        # same file. A case-sensitive guard protected one spelling of the two,
+        # which is to say it protected neither.
+        for path in (
+            "Scripts/validate_requirements.py",
+            "SCRIPTS/validate_requirements.py",
+            ".CLAUDE/settings.json",
+            "Init.ps1",
+            "init.PS1",
+            "Agents.md",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self._write(path)[0], 2)
+
+    def test_the_bare_directory_name_counts_too(self) -> None:
+        # `mv scripts scripts_old` names the directory without a trailing slash,
+        # and moving the validators away is as good as editing them.
+        self.assertEqual(hh.protected_path("scripts"), "scripts/")
+        self.assertEqual(hh.protected_path(".github"), ".github/")
+
+    def test_it_blocks_writing_to_the_newly_covered_paths(self) -> None:
+        for path in (
+            ".github/workflows/harness.yml",
+            "reset.ps1",
+            "reset.sh",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self._write(path)[0], 2)
+
+    def test_the_agent_cannot_install_its_own_maintenance_door(self) -> None:
+        # One allowed Write used to disarm every protection below it, and a
+        # second removed the evidence.
+        code, err = self._write(hh.MAINTENANCE_MARK)
+        self.assertEqual(code, 2)
+        self.assertIn("does not let a tool create it", err)
+
+    def test_not_even_while_maintenance_is_already_open(self) -> None:
+        # Otherwise the door renews itself: declare once, keep it forever.
+        with open(os.path.join(self.root, hh.MAINTENANCE_MARK), "w") as handle:
+            handle.write("")
+        self.assertEqual(self._write(hh.MAINTENANCE_MARK)[0], 2)
+
+    def test_the_powershell_tool_is_treated_like_bash(self) -> None:
+        # The tool was missing from the settings matcher, so this branch had
+        # never run on a win32 repo where PowerShell is the primary shell.
+        blocked = self._run({
+            "tool_name": "PowerShell",
+            "tool_input": {"command": "Set-Content scripts/validate_requirements.py -Value x"},
+        })
+        self.assertEqual(blocked[0], 2)
+
+
+class TestSettingsWiring(unittest.TestCase):
+    """The hook can only guard the tools the settings actually route to it."""
+
+    def _matchers(self) -> dict:
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        with open(os.path.join(root, ".claude", "settings.json"), encoding="utf-8") as handle:
+            settings = json.load(handle)
+        return {
+            event: [entry.get("matcher", "") for entry in entries]
+            for event, entries in settings["hooks"].items()
+        }
+
+    def test_pre_tool_use_covers_powershell(self) -> None:
+        # harness_hook.py has handled "PowerShell" all along; the settings never
+        # routed it, so the branch was dead code on the platform that needed it.
+        self.assertTrue(any("PowerShell" in m for m in self._matchers()["PreToolUse"]))
+
+    def test_post_tool_use_covers_every_writing_tool(self) -> None:
+        matchers = " ".join(self._matchers()["PostToolUse"])
+        for tool in hh.WRITING_TOOLS:
+            with self.subTest(tool=tool):
+                self.assertIn(tool, matchers)
 
 
 if __name__ == "__main__":

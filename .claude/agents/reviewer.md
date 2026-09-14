@@ -47,12 +47,18 @@ changes. You do not edit code.
 
 Your final output is **a single block** written to
 `progress/review_<feature>.md` (use the feature's `name`, e.g.
-`progress/review_cli_search.md`):
+`progress/review_cli_search.md`).
+
+The `Verdict:` line must name **exactly one** of `APPROVED` or
+`CHANGES_REQUESTED` — write the one you decided, never both. A line that names
+both is not read as an approval; it is read as a report you did not finish, and
+the verifier says so. (It used to be read as an approval, which is how an
+unedited template could close a feature.)
 
 ```markdown
 # Review — feature <id> <name>
 
-**Verdict:** APPROVED | CHANGES_REQUESTED
+**Verdict:** APPROVED
 **Spec:** specs/REQ-00N_<name>.md (status: approved)
 
 ## Acceptance criteria
