@@ -381,6 +381,115 @@ class TestPreToolUse(unittest.TestCase):
         self.assertEqual(blocked[0], 2)
 
 
+class TestShellCorpus(unittest.TestCase):
+    """The two lists this matcher exists to satisfy at the same time.
+
+    Inverting a guard is where holes hide, and over-tightening one is how it ends
+    up switched off. So both directions are pinned: real commands must keep
+    working, and every bypass the audit found must stay shut.
+    """
+
+    MUST_PASS = (
+        # Reading the harness — the reason the deny-list existed in the first
+        # place was to not get in the way of this.
+        "cat scripts/harness_hook.py",
+        "head -50 scripts/approve.py",
+        "grep -n 'def ' scripts/validate_requirements.py",
+        "sed -n '1,40p' scripts/approve.py",
+        "wc -l scripts/harness_hook.py",
+        "find scripts -name '*.py'",
+        "ls -la .claude/agents/",
+        # Running it.
+        "python scripts/validate_requirements.py .",
+        "python scripts/validate_feature_list.py feature_list.json",
+        "python -m unittest discover -s scripts/tests -q",
+        "python -m pytest scripts/tests -q",
+        "./init.sh --quiet",
+        # git that cannot rewrite the tree.
+        "git log --oneline -5",
+        "git diff scripts/harness_hook.py",
+        "git status --porcelain",
+        "git add scripts/harness_hook.py",
+        # Ordinary project work, which never names the zone at all.
+        "pytest tests/",
+        "npm test",
+        "python src/app.py",
+        "mkdir src/api",
+        "rm -rf build/",
+        # The false positive that started all this: a path in a commit message.
+        "git commit -m 'touch up scripts/harness_hook.py'",
+        # And output-discarding, which carries a `>` but writes nothing.
+        "python -m pytest scripts/tests -q 2>&1 | tail -15",
+        "cat scripts/harness_hook.py 2>/dev/null",
+    )
+
+    MUST_BLOCK = (
+        # The inline-code family: no path analysis can read what the code does.
+        'python -c "open(\'scripts/validate_requirements.py\',\'w\')"',
+        "perl -pi -e 's/x/y/' scripts/validate_requirements.py",
+        # Writers the old token list had never heard of.
+        "install -m644 /tmp/fake.py scripts/validate_requirements.py",
+        "dd of=scripts/validate_requirements.py if=/tmp/f",
+        "ln -sf /tmp/fake.py scripts/validate_requirements.py",
+        "sed --in-place 's/a/b/' init.sh",
+        "find scripts -name '*.py' -exec truncate -s0 {} +",
+        # The git-native family — the worst of them, because a transcript full of
+        # these looks like ordinary work and leaves a clean tree.
+        "git checkout HEAD~5 -- scripts/",
+        "git restore --source=HEAD~1 scripts/validate_requirements.py",
+        "git apply /tmp/evil.diff scripts/",
+        "git stash pop scripts/",
+        # Taking the whole directory away instead of editing it.
+        "mv scripts scripts_old",
+        "rm -rf scripts/tests",
+        # Moving the goalposts, including across tool calls: the Bash shell is
+        # persistent, so a `cd` taints commands this hook will never see.
+        "cd scripts",
+        # What the old list did catch, still caught.
+        "echo pass > scripts/validate_requirements.py",
+        "truncate -s0 init.sh",
+        "Set-Content scripts/harness_hook.py -Value y",
+    )
+
+    def test_real_commands_are_not_blocked(self) -> None:
+        for command in self.MUST_PASS:
+            with self.subTest(command=command):
+                self.assertIsNone(hh.inspect_command(command))
+
+    def test_every_bypass_the_audit_found_is_shut(self) -> None:
+        for command in self.MUST_BLOCK:
+            with self.subTest(command=command):
+                self.assertIsNotNone(hh.inspect_command(command))
+
+    def test_a_heredoc_into_an_interpreter_is_blocked(self) -> None:
+        # Checked against the whole command: a heredoc body ignores `;` and `&&`,
+        # so splitting into segments first is precisely how this used to pass.
+        self.assertIsNotNone(hh.inspect_command(
+            'python - <<EOF\nopen("scripts/validate_requirements.py","w").write("x")\nEOF'
+        ))
+
+    def test_a_command_that_never_names_the_zone_is_not_examined(self) -> None:
+        # This is what keeps the inversion affordable: the allow-list is only
+        # consulted for commands that mention the harness, so ordinary work
+        # cannot be blocked by any rule in it.
+        for command in ("dd of=/tmp/x if=/dev/zero", "curl -X POST https://example.com",
+                        "docker compose up -d", "rm -rf node_modules"):
+            with self.subTest(command=command):
+                self.assertIsNone(hh.inspect_command(command))
+
+    def test_audit_mode_reports_without_blocking(self) -> None:
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {hh.AUDIT_ENV: "1"}), \
+             mock.patch.object(hh, "in_maintenance", return_value=False), \
+             mock.patch.object(hh, "_hook_input", return_value={
+                 "tool_name": "Bash",
+                 "tool_input": {"command": "rm -rf scripts/tests"}}), \
+             redirect_stdout(out), redirect_stderr(io.StringIO()):
+            code = hh.event_pre_tool_use()
+        self.assertEqual(code, hh.PASS)
+        self.assertIn("would block", out.getvalue())
+
+
 class TestSettingsWiring(unittest.TestCase):
     """The hook can only guard the tools the settings actually route to it."""
 

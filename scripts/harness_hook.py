@@ -46,6 +46,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import unittest
@@ -235,13 +236,75 @@ PROTECTED_ZONE = (
 
 MAINTENANCE_MARK = ".harness-maintenance"
 
-# Signs of a write in a shell line. A deliberately short heuristic: `Bash` can
-# write in a thousand ways and chasing all of them would mean constant false
-# positives. It covers the ones that actually show up.
-WRITE_TOKENS = (
-    ">", ">>", "tee ", "rm ", "mv ", "cp ", "sed -i", "truncate ",
-    "Set-Content", "Add-Content", "Out-File", "Remove-Item", "New-Item",
-)
+# --- the shell matcher ------------------------------------------------------
+#
+# This used to be a deny-list: "a write token AND a protected path in the same
+# segment". The tokens were `>`, `rm `, `mv `, `sed -i` and a handful more, and
+# the audit walked straight past it sixteen different ways — `python -c`, a
+# heredoc into any interpreter, `install`, `dd`, `patch`, `git checkout HEAD~5
+# -- scripts/`, `git restore`, `git apply`, `ln -sf`, `perl -pi -e`,
+# `sed --in-place`, `find -exec truncate`, `cd scripts && echo x > f`, paths
+# built from variables. Each fix would have added one more token, and the next
+# way of writing would have walked past the new list too.
+#
+# So the question is inverted. A segment that names a protected path has to look
+# like a READ to be allowed; anything else is refused. The unknown verb is now
+# the blocked case rather than the allowed one.
+#
+# The authors' objection to this — "chasing every way of writing from Bash would
+# mean constant false positives" — is answered by *when* the allow-list applies:
+# only to segments that name a protected path. Ordinary work (`pytest tests/`,
+# `git commit`, `npm test`, `python src/app.py`) never mentions `scripts/` or
+# `AGENTS.md`, is never examined, and cannot be blocked by any of this.
+
+# Verbs that only read. Anything here is allowed to name a protected path.
+READ_ONLY_VERBS = frozenset({
+    # POSIX reads
+    "cat", "head", "tail", "less", "more", "ls", "stat", "file", "wc", "du",
+    "sort", "uniq", "cut", "tr", "diff", "comm", "md5sum", "sha256sum", "echo",
+    "printf", "test", "which", "type", "tree", "realpath", "basename", "dirname",
+    "grep", "egrep", "fgrep", "rg", "pwd", "env", "date",
+    # PowerShell reads
+    "get-content", "get-childitem", "get-item", "get-itemproperty",
+    "select-string", "test-path", "resolve-path", "compare-object",
+    "measure-object", "select-object", "where-object", "sort-object",
+    "format-table", "format-list", "write-host", "write-output", "get-help",
+    "get-command", "gc", "gci", "sls", "dir",
+})
+
+# Verbs that read only if they are not asked to do otherwise. The flags that
+# turn each one into a writer are listed next to it.
+CONDITIONAL_VERBS = {
+    "find": ("-exec", "-execdir", "-delete", "-ok", "-okdir", "-fprint", "-fls"),
+    "sed": ("-i", "--in-place", "-i.bak", "--in-place=", "-i'"),
+    "awk": ("-i", "inplace"),
+    "gawk": ("-i", "inplace"),
+}
+
+# git is not one verb but two dozen, and the split is not cosmetic: `git log`
+# cannot touch the working tree and `git checkout -- scripts/` replaces it
+# wholesale with an older, weaker validator while looking innocuous in a
+# transcript. `add` and `commit` stay on the read side because neither alters
+# file *content* — and keeping them there is what preserves the fix for the
+# false positive that used to block an ordinary `git commit`.
+GIT_READ_ONLY = frozenset({
+    "status", "log", "diff", "show", "blame", "ls-files", "ls-tree", "rev-parse",
+    "rev-list", "describe", "cat-file", "grep", "remote", "shortlog", "branch",
+    "tag", "fetch", "config", "add", "commit", "push",
+})
+
+# Interpreter flags that carry code in the command line, where no path analysis
+# can see what the code does. `python -c "open('scripts/x.py','w')"` was the
+# cleanest bypass in the audit.
+INLINE_CODE_FLAGS = ("-c", "-e", "-e'", '-e"', "--eval", "-command", "-encodedcommand")
+INTERPRETERS = frozenset({
+    "python", "python3", "py", "perl", "ruby", "node", "sh", "bash", "zsh",
+    "powershell", "pwsh", "php", "deno",
+})
+
+# Prefixes that wrap a real command without being one.
+COMMAND_PREFIXES = frozenset({"sudo", "nohup", "time", "command", "exec", "&"})
+ENV_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
 # Redirections that cannot write to a file in the repository: discarding output
 # and duplicating a descriptor. They carry a `>` and used to trip the check on
@@ -256,6 +319,94 @@ NULL_REDIRECTS = re.compile(r"\d?>>?\s*(?:&\d|/dev/null|NUL\b)", re.IGNORECASE)
 SEGMENT_SEPARATORS = re.compile(r"[\n;|&]+")
 
 WRITING_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
+
+# Set HARNESS_HOOK_AUDIT=1 to see what the matcher WOULD block without blocking
+# it. A guard that is switched on blind is a guard that gets ripped out a week
+# later; this is how you find out what it costs before paying it.
+AUDIT_ENV = "HARNESS_HOOK_AUDIT"
+
+
+def mentions_protected(segment: str) -> str | None:
+    """The protected prefix this segment names, or None.
+
+    Matches both `scripts/` and a bare `scripts` at a word boundary: the bare
+    form is how `mv scripts scripts_old` used to walk off with the validators.
+    """
+    lowered = segment.replace("\\", "/").lower()
+    for prefix in PROTECTED_ZONE:
+        bare = prefix.rstrip("/")
+        if re.search(rf"(?<![\w./-]){re.escape(bare)}(?![\w-])", lowered):
+            return prefix
+    return None
+
+
+def _words(segment: str) -> list[str]:
+    try:
+        return shlex.split(segment, posix=False)
+    except ValueError:  # an unbalanced quote — treat it as opaque, not as safe
+        return segment.split()
+
+
+def read_only_shape(segment: str) -> str | None:
+    """None if the segment only reads; otherwise why it does not.
+
+    Only ever consulted for segments that name a protected path.
+    """
+    scrubbed = NULL_REDIRECTS.sub(" ", segment)
+    if ">" in scrubbed:
+        return "it redirects output into a file"
+
+    words = [w for w in _words(scrubbed) if w]
+    while words:
+        head = words[0]
+        if head.lower() in COMMAND_PREFIXES or ENV_ASSIGNMENT_RE.match(head):
+            words.pop(0)
+            continue
+        break
+    if not words:
+        return None
+
+    verb = os.path.basename(words[0].replace("\\", "/")).lower()
+    verb = verb[:-4] if verb.endswith(".exe") else verb
+    rest = [w.lower() for w in words[1:]]
+
+    if verb in INTERPRETERS and any(flag in rest for flag in INLINE_CODE_FLAGS):
+        return f"`{verb}` is being handed code on the command line, and no path check can read what that code does"
+
+    if verb == "cd":
+        # `cd scripts && echo x > f` splits into two segments, and the one that
+        # writes names no protected path. The shell is also persistent across
+        # tool calls, so a `cd` can taint a later command no per-command
+        # analysis will ever see. Refusing the `cd` is cheaper than modelling it.
+        return "it changes directory into the protected zone — work from the repository root instead"
+
+    if verb == "git":
+        sub = rest[0] if rest else ""
+        if sub not in GIT_READ_ONLY:
+            return f"`git {sub}` can rewrite the working tree"
+        return None
+
+    if verb in CONDITIONAL_VERBS:
+        for flag in CONDITIONAL_VERBS[verb]:
+            if any(word.startswith(flag) for word in rest):
+                return f"`{verb} {flag}` writes"
+        return None
+
+    if verb in READ_ONLY_VERBS:
+        return None
+
+    if verb in INTERPRETERS:
+        # Running a script file is how the validators are invoked; it is the
+        # inline-code form, handled above, that cannot be checked.
+        return None
+
+    if verb in ("pytest", "unittest"):
+        return None
+
+    if verb.startswith("./") or verb in ("init.sh", "init.ps1"):
+        return None
+
+    return f"`{verb}` is not a known read-only command"
 
 
 def in_maintenance() -> bool:
@@ -347,19 +498,60 @@ def event_pre_tool_use() -> int:
         return PASS
 
     if tool in ("Bash", "PowerShell"):
-        command = NULL_REDIRECTS.sub(" ", str(data.get("command", "")).replace("\\", "/"))
-        for segment in SEGMENT_SEPARATORS.split(command):
-            if not any(token in segment for token in WRITE_TOKENS):
-                continue
-            for prefix in PROTECTED_ZONE:
-                if prefix in segment:
-                    return _block(
-                        _reason(prefix)
-                        + "\n(Spotted in a shell command: if you were only reading, "
-                        "rephrase it without write operators.)"
-                    )
+        verdict = inspect_command(str(data.get("command", "")))
+        if verdict is None:
+            return PASS
+        prefix, why = verdict
+        message = _shell_reason(prefix, why)
+        if os.environ.get(AUDIT_ENV):
+            # Audit mode: say what would have happened, change nothing.
+            print(f"[harness][audit] would block ({why}): {prefix}")
+            return PASS
+        return _block(message)
 
     return PASS
+
+
+def inspect_command(raw: str) -> tuple[str, str] | None:
+    """(protected prefix, why it is not a read) for the first offending part.
+
+    None means nothing in this command names the protected zone, or everything
+    that does only reads it.
+    """
+    # Scrubbed before splitting, not after: `&` is one of the segment
+    # separators, so `2>&1` was being torn into a dangling `2>` and a stray `1`,
+    # and the dangling half read as a redirection into a file.
+    command = NULL_REDIRECTS.sub(" ", raw.replace("\\", "/"))
+
+    # Heredocs are checked against the whole command, not per segment: the body
+    # does not respect `;` or `&&`, so splitting first is exactly how
+    # `python - <<EOF ... open("scripts/x.py","w") ... EOF` got through.
+    if "<<" in command:
+        prefix = mentions_protected(command)
+        if prefix:
+            return prefix, "a heredoc feeds text to a command, and the guard cannot read what it does with it"
+
+    for segment in SEGMENT_SEPARATORS.split(command):
+        prefix = mentions_protected(segment)
+        if not prefix:
+            continue
+        why = read_only_shape(segment)
+        if why:
+            return prefix, why
+    return None
+
+
+def _shell_reason(target: str, why: str) -> str:
+    return (
+        f"[harness] this command names {target}, part of the layer that verifies "
+        f"the work, and {why}.\n"
+        f"That layer is not touched during a development session: an agent that "
+        f"sees red does not fix the red by editing the validator.\n"
+        f"If you only meant to read it, say it with a read: cat, head, grep, ls, "
+        f"git log/diff/show, or running one of the validators. If you really are "
+        f"maintaining the harness, ask the human to create the {MAINTENANCE_MARK} "
+        f"file at the root."
+    )
 
 
 def main(argv: list[str]) -> int:
