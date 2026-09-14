@@ -326,7 +326,8 @@ project.
 **Special case:** if *nothing* is configured, the repo is the freshly copied
 template. Instead of spitting out every failure, it prints the `bootstrap.ps1`
 command and stops. That is the state this template lives in on GitHub: **its
-verifier comes out red on purpose**.
+verifier comes out red on purpose**. The `stop` hook knows about this state and
+does not block on it — see "The template is exempt" further down.
 
 Exit codes: `0` configured · `1` essential configuration missing.
 
@@ -560,6 +561,19 @@ project would see a failure on every edit.
 If it always blocked, the session would never close: hence `stop_hook_active`,
 which says we are already coming from a block. And note: `stop` **does not fire
 if you interrupt with Ctrl+C**.
+
+**The template is exempt.** On the uninstantiated template the verifier is red
+*by design*: section 3 reporting `NOT INSTANTIATED` is it doing its job. Blocking
+on that made the condition circular — no session on the template could ever
+close, and each one ended by writing a blocker note in `progress/current.md`
+repeating what the verifier had just said. So `stop` asks
+`validate_project_setup` first and, if the repository is `pristine`, lets the
+turn close with a note instead of a block.
+
+The exemption is deliberately narrow: `pristine` means the project is unnamed
+**and** the architecture unfilled **and** there are no features **and** `src/` is
+empty. Name the project and it is gone — a half-built project blocks like any
+other. It is an exemption for the template, not a way out of a red verifier.
 
 ### `pre-tool-use` — the only one that arrives in time
 

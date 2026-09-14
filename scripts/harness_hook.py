@@ -13,7 +13,9 @@ Purpose
 
 Events
     stop          Before closing the turn: runs the whole verifier. If it is red,
-                  it blocks (exit 2) and tells the agent what is missing.
+                  it blocks (exit 2) and tells the agent what is missing. The one
+                  exception is the uninstantiated template, where red is the
+                  expected state and blocking would be circular.
     post-edit     After every Edit/Write: runs the tests. If they are broken, it
                   blocks.
     pre-tool-use  BEFORE writing: protects the layer that does the verifying. It
@@ -91,11 +93,46 @@ def verifier_command() -> list[str]:
     return ["./init.sh", "--quiet"]
 
 
+def _pristine_template() -> bool:
+    """Is this the uninstantiated template rather than a real project?
+
+    `validate_project_setup` already knows how to tell: its `pristine` flag is
+    true when nothing at all is configured. We reuse it instead of re-deriving
+    the condition, so the two cannot drift apart.
+    """
+    scripts_dir = os.path.dirname(os.path.abspath(__file__))
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    try:
+        from validate_project_setup import check
+    except ImportError:
+        return False
+    try:
+        _fails, _warns, pristine = check(REPO_ROOT)
+    except Exception:  # noqa: BLE001 — if we cannot tell, assume it is a project
+        return False
+    return bool(pristine)
+
+
 def event_stop() -> int:
     hook_input = _hook_input()
     if hook_input.get("stop_hook_active"):
         # We already come from a block: insisting would leave the session unable
         # to close.
+        return PASS
+
+    if _pristine_template():
+        # The template repository itself. The verifier is red here **by design**
+        # — section 3 reporting "NOT INSTANTIATED" is it doing its job, not a
+        # defect to be worked around. Blocking on it would make the condition
+        # circular: no session on the template could ever close, and every one
+        # would end by writing a blocker note that says the same thing. There is
+        # no project here to leave in a bad state, so there is nothing to guard.
+        print(
+            "[harness] this is the uninstantiated template, not a project: the "
+            "verifier is red by design and there is nothing to close. Copy the "
+            "folder, run the bootstrap script there, and work on the copy."
+        )
         return PASS
 
     try:
