@@ -18,9 +18,20 @@ Events
                   expected state and blocking would be circular.
     post-edit     After every Edit/Write: runs the tests. If they are broken, it
                   blocks.
-    pre-tool-use  BEFORE writing: protects the layer that does the verifying. It
-                  is the only moment a write can be prevented, because the other
-                  two hooks arrive once it already happened.
+    pre-tool-use  BEFORE writing: protects the layer that does the verifying, and
+                  keeps each agent inside the scope its own .md declares. It is
+                  the only moment a write can be prevented, because the other two
+                  hooks arrive once it already happened.
+
+What it can and cannot do
+    The typed tools (Write/Edit/MultiEdit/NotebookEdit) are checked by path and
+    the check is reliable. Shell commands are checked by shape — a segment that
+    names the protected zone has to look like a read — which covers far more than
+    the old token list but is still static analysis of a shell, so a path
+    assembled from a variable, or a program written into src/ and then run, is
+    beyond it. This raises the cost of tampering; it is not a security boundary
+    against an agent that has Bash and runs as the same user. Say so plainly
+    rather than implying otherwise.
 
 Usage
     python scripts/harness_hook.py stop
@@ -236,6 +247,34 @@ PROTECTED_ZONE = (
 
 MAINTENANCE_MARK = ".harness-maintenance"
 
+# --- who is writing ---------------------------------------------------------
+#
+# The scope rules in `.claude/agents/*.md` ("you have Write only for
+# progress/current.md", "do not write to any other file") enforced nothing: the
+# `tools:` front matter restricts by tool, never by path, and all four agents
+# have Bash. This table is the same rules, in the one place that can apply them.
+#
+# The key is `agent_type` from the hook input, which Claude Code sets and the
+# model cannot. Absence of `agent_id` means the main thread — which CLAUDE.md
+# defines as the leader for this repository.
+AGENT_SCOPES = {
+    "leader": ("progress/", "feature_list.json"),
+    "implementer": ("src/", "tests/", "progress/", "feature_list.json"),
+    "reviewer": ("progress/",),
+    "analyst": ("specs/", "docs/architecture.md", "progress/", "feature_list.json"),
+}
+
+# Working material: legitimate for the role that owns it, off-limits to the
+# others. Kept apart from PROTECTED_ZONE, which nobody writes during a session.
+SCOPED_ZONE = (
+    "src/",
+    "tests/",
+    "specs/",
+    "progress/",
+    "docs/architecture.md",
+    "feature_list.json",
+)
+
 # --- the shell matcher ------------------------------------------------------
 #
 # This used to be a deny-list: "a write token AND a protected path in the same
@@ -324,6 +363,64 @@ WRITING_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
 # it. A guard that is switched on blind is a guard that gets ripped out a week
 # later; this is how you find out what it costs before paying it.
 AUDIT_ENV = "HARNESS_HOOK_AUDIT"
+
+
+def caller_role(hook_input: dict) -> str | None:
+    """Which agent is making this call, or None if it cannot be told.
+
+    None matters: it means *do not enforce scopes*, not "assume the strictest".
+    These fields come from Claude Code, so a version that stops sending them
+    would otherwise turn every write in the repository into a block. Degrading
+    to the previous behaviour is the only safe direction for a guard built on a
+    field somebody else owns.
+    """
+    agent_type = hook_input.get("agent_type")
+    if isinstance(agent_type, str) and agent_type in AGENT_SCOPES:
+        return agent_type
+    if agent_type is None and hook_input.get("agent_id") is None:
+        # No subagent in sight: the main thread, which CLAUDE.md makes the leader.
+        # Only trusted when the payload carries the surrounding session fields —
+        # an empty dict means we were run by hand or by an older version, and
+        # guessing "leader" from nothing would block an implementer's own code.
+        if "session_id" in hook_input or "cwd" in hook_input:
+            return "leader"
+    return None
+
+
+def scoped_path(path: str) -> str | None:
+    """The SCOPED_ZONE prefix this path falls under, or None."""
+    if not path:
+        return None
+    normalized = path.replace("\\", "/")
+    absolute = normalized if os.path.isabs(normalized) else os.path.join(REPO_ROOT, normalized)
+    try:
+        relative = os.path.relpath(os.path.abspath(absolute), REPO_ROOT).replace("\\", "/")
+    except ValueError:
+        relative = normalized
+    if relative.startswith(".."):
+        return None
+    relative = relative.lower()
+    for prefix in SCOPED_ZONE:
+        if relative == prefix.rstrip("/") or relative.startswith(prefix) or relative == prefix:
+            return prefix
+    return None
+
+
+def scope_violation(role: str, prefix: str) -> bool:
+    """Is `prefix` outside what `role` is allowed to write?"""
+    return prefix not in AGENT_SCOPES.get(role, ())
+
+
+def _scope_reason(role: str, target: str, prefix: str) -> str:
+    allowed = ", ".join(AGENT_SCOPES[role]) or "nothing here"
+    return (
+        f"[harness] you are the `{role}`, and {prefix} is not yours to write "
+        f"({target}).\n"
+        f"Your scope is: {allowed}.\n"
+        f"This is the rule your own agent file states; it is enforced here "
+        f"because prose in a .md enforces nothing. If the work really belongs to "
+        f"another role, that is the role that should be doing it."
+    )
 
 
 def mentions_protected(segment: str) -> str | None:
@@ -492,7 +589,18 @@ def event_pre_tool_use() -> int:
         if in_maintenance():
             return PASS
         prefix = protected_path(target)
-        return _block(_reason(prefix)) if prefix else PASS
+        if prefix:
+            return _block(_reason(prefix))
+
+        role = caller_role(hook_input)
+        scoped = scoped_path(target)
+        if role and scoped and scope_violation(role, scoped):
+            message = _scope_reason(role, target, scoped)
+            if os.environ.get(AUDIT_ENV):
+                print(f"[harness][audit] would block: {role} writing {scoped}")
+                return PASS
+            return _block(message)
+        return PASS
 
     if in_maintenance():
         return PASS

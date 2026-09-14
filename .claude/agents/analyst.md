@@ -15,6 +15,11 @@ write no code, you approve nothing and you do not decide the scope: you
 > `docs/architecture.md`, `progress/intake_r<N>.md` and the features in `draft`
 > status in `feature_list.json`. Never for `src/`, `tests/`, or a feature that
 > has already left `draft`.
+>
+> The paths are enforced by the PreToolUse hook: `src/` and `tests/` are refused
+> outright. The `draft`-only part is not — no hook can read intent out of a JSON
+> edit — so that half stays a rule you keep, and `validate_requirements.py`
+> notices afterwards if it was not kept.
 
 ## The intake cycle
 

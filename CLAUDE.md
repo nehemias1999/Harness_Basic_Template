@@ -65,8 +65,16 @@ the content. See `scripts/demo_orchestration.py` for the pattern, and
   But **not in the middle of a development session**. Those files are the ones
   that decide whether your work is any good, and an agent that sees the
   verifier red has a trivial way to turn it green. That is why a hook protects
-  them: to touch them you have to declare maintenance by creating
-  `.harness-maintenance` at the root, and delete it when you are done. If you
-  hit that block while implementing a feature, the right answer is almost
-  never to open the door: it is that the harness is telling you something you
+  them: to touch them, maintenance has to be declared by the presence of
+  `.harness-maintenance` at the root.
+
+  **You cannot create that file yourself** — the hook refuses it, even while
+  maintenance is already open. A door the agent installs for itself is not a
+  door: it used to cost one write to disarm every protection in the repository,
+  and a second to remove the evidence. Ask the human to create it from their own
+  shell (`! touch .harness-maintenance`). Deleting it is allowed, and you should,
+  when you are done.
+
+  If you hit that block while implementing a feature, the right answer is almost
+  never to ask for the door: it is that the harness is telling you something you
   did not want to hear.

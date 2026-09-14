@@ -11,7 +11,9 @@ and coordinate**, never to implement.
 
 > You have `Write`/`Edit` **only** for the harness state:
 > `progress/current.md`, `progress/history.md` and the `status` field of
-> `feature_list.json`. Never for `src/` or `tests/`.
+> `feature_list.json`. Never for `src/` or `tests/` — the PreToolUse hook
+> enforces that, so "just this one quick line" is not available to you even if
+> you talk yourself into it.
 >
 > And, **only while running `/approve`**, also the `status:`/`approved_on:`
 > front matter of `specs/REQ-*.md` and the template note in

@@ -478,6 +478,28 @@ it, Claude Code shows you the exact command — `python scripts/approve.py 1 2` 
 and waits for your confirmation. That prompt is the last chance to see *what*
 is being signed before it is signed, and it costs nothing.
 
+### What the signature does and does not prove
+
+`approved_hash` is a truncated SHA-256 of the requirement's text, and
+`validate_requirements.py --fingerprint` will compute one for you. There is no
+key and no secret, which has a consequence worth being straight about:
+
+- ✅ **It detects change after approval.** Edit an approved spec's criteria and
+  the verifier says so on the next run. That is what it was built for, and it
+  works — against drift, against a careless edit, against a well-meaning
+  "clarification" nobody re-read.
+- ❌ **It does not prove who approved.** Anyone who can write the file can
+  compute the matching hash. The fingerprint says "this text has not changed
+  since somebody wrote this number"; it does not say who, and it cannot.
+
+The prompt above guards `approve.py`. It does not guard the *front matter* —
+writing `status: approved` by hand is an ordinary file edit. So read the phrase
+"a 'sure, go ahead' in the chat approves nothing" for what it is: a **rule of the
+process**, kept by agents that follow the rules, and a real audit trail in git
+afterwards. It is not a lock. If you need a lock, the approval has to move
+somewhere the agent cannot reach at all — a signed commit, or a human running
+the script outside the session.
+
 Exit codes: `0` signed (or simulated) · `1` nothing was signed, and the reason
 is printed.
 
@@ -587,24 +609,78 @@ green, which is editing the validator. Asking nicely in a `.md` is not enough,
 because that is exactly the file it can rewrite.
 
 It also looks at shell commands, because the `Edit|Write` matcher does not see
-an `echo x > scripts/validator.py`. It is a short heuristic — it looks for write
-signals (`>`, `rm`, `mv`, `sed -i`, `Remove-Item`…) over protected paths — and
-deliberately stays short: chasing every way of writing from `Bash` would mean
-constant false positives. It is still a net, not a cage.
+an `echo x > scripts/validator.py`.
 
-Two things keep that net off ordinary commands. **The pairing is local:** the
-command is split on `;`, `|`, `&` and newlines, and a write signal only counts
-against a protected path when both land in the same piece. Otherwise the two
-halves only had to appear *somewhere* in the same string, and a `git commit`
-whose message quoted a path — with a `>` in the email address of a
-`Co-Authored-By:` trailer — blocked. **And discarded output is not a write:**
-`2>&1`, `>/dev/null` and `>NUL` are stripped first, so `pytest scripts/tests
-2>&1 | tail` reads like the read it is.
+**The shell check asks what a command *is*, not what it contains.** It used to be
+a deny-list — a write token (`>`, `rm `, `mv `, `sed -i`…) next to a protected
+path — and an audit walked past it sixteen ways: `python -c`, a heredoc into any
+interpreter, `install`, `dd`, `patch`, `git checkout HEAD~5 -- scripts/`,
+`git restore`, `git apply`, `ln -sf`, `perl -pi -e`, `sed --in-place`,
+`find -exec truncate`, `cd scripts && …`, `mv scripts scripts_old`. Each fix
+would have added one more token, and the next way of writing would have walked
+past the new list too.
 
-What still trips it is a genuine write signal next to a protected path in the
-same segment, even when it writes nothing — `git commit -m "touch up
-scripts/x.py > y"`, say. That residue is the price of a short heuristic, and
-the fix is the same as ever: rephrase, or declare maintenance.
+So it is inverted. A segment that **names a protected path** has to look like a
+read to be allowed; anything else is refused. The unknown verb is the blocked
+case now, which is the only version of this that covers what nobody has thought
+of yet.
+
+The obvious objection — that this means constant false positives — is answered by
+*when* the allow-list applies, not by how long it is: **only segments that name
+the protected zone are examined at all**. `pytest tests/`, `npm test`,
+`python src/app.py`, `git commit`, `rm -rf node_modules` never mention `scripts/`
+or `AGENTS.md`, are never looked at, and cannot be blocked by any rule in there.
+What *is* allowed to name the zone: the read verbs (`cat`, `head`, `grep`, `ls`,
+`find` without `-exec`, `sed -n`…), the git subcommands that cannot rewrite the
+working tree (`log`, `diff`, `show`, `status`, `add`, `commit`…), running a
+script file (`python scripts/validate_requirements.py .`), and the verifier.
+
+Three things are judged against the whole command rather than a segment, because
+segment-local pairing cannot see them: **heredocs** (the body ignores `;` and
+`&&`), **`cd` into the zone** (it moves the goalposts — and the Bash tool keeps
+one shell across calls, so a `cd` can taint a command this hook is never shown),
+and **null redirects** (`2>&1`, `>/dev/null`, `>NUL`), which are scrubbed before
+splitting since `&` is itself a separator.
+
+Both directions are pinned by corpus tests in
+`scripts/tests/test_harness_hook.py`: two dozen real commands that must keep
+working, and every bypass the audit found, which must stay shut. Inverting a
+guard is where holes hide; over-tightening one is how it ends up switched off.
+
+**Try it before you trust it.** `HARNESS_HOOK_AUDIT=1` runs the matcher and
+prints what it *would* block, without blocking anything. Use it for a few real
+sessions before relying on the enforcement.
+
+### What it still cannot do
+
+Worth stating plainly, because a guard people over-trust is worse than one they
+understand. It cannot see a path built from a variable (`D=scripts; rm -rf $D`),
+a command assembled across two Bash calls, or a program written into `src/` and
+then run. Static analysis of a shell does not reach those. **This raises the cost
+of tampering; it is not a security boundary against an agent that has `Bash` and
+runs as the same user as you.**
+
+### Per-agent scopes
+
+`.claude/agents/*.md` each declare a write scope ("you have `Write` only for your
+report"). The `tools:` front matter restricts by *tool*, never by *path*, and all
+four agents have `Bash` — so those sentences enforced nothing. The hook now
+applies them: it reads which agent is calling and refuses writes outside that
+agent's scope.
+
+| Agent | May write |
+|-------|-----------|
+| `leader` (the main thread, per `CLAUDE.md`) | `progress/`, `feature_list.json` |
+| `implementer` | `src/`, `tests/`, `progress/`, `feature_list.json` |
+| `reviewer` | `progress/` — its report, and nothing else |
+| `analyst` | `specs/`, `docs/architecture.md`, `progress/`, `feature_list.json` |
+
+Two limits, both deliberate. If the caller's identity cannot be read, **no scope
+is enforced** — it degrades to the previous behaviour rather than blocking every
+write, because that field belongs to Claude Code, not to this repository.
+And field-level rules ("the leader may edit only the `status` field") are not
+expressible here: the hook sees a path, not a parsed document. Those stay where
+they already work, in `validate_feature_list.py` and `validate_requirements.py`.
 
 **How to maintain the harness itself.** The door exists, but you have to open
 it knowingly: create `.harness-maintenance` at the root (or export

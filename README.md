@@ -60,6 +60,12 @@ Then, in this order:
    That is the only moment the harness considers there is work to do: a "sure,
    go ahead" in the chat approves nothing. The approval is the command with the
    ids written out, and it lands in git.
+
+   Read that as a **rule of the process, not a lock**. The harness records who
+   approved what and notices if an approved requirement changes afterwards; it
+   cannot stop an agent determined to write `status: approved` itself, because
+   the fingerprint has no secret in it. `docs/scripts.md` § "What the signature
+   does and does not prove" is explicit about where the line is.
 4. **Review `docs/conventions.md` and `docs/verification.md`.** They ship with
    the template's Python conventions; adjust them to taste.
 5. **Run the verifier** — it should come out green.

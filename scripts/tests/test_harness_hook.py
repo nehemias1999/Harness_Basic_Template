@@ -381,6 +381,84 @@ class TestPreToolUse(unittest.TestCase):
         self.assertEqual(blocked[0], 2)
 
 
+class TestAgentScopes(unittest.TestCase):
+    """The scope each agent file declares, actually applied."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = self._tmp.name
+        self._patch = mock.patch.object(hh, "REPO_ROOT", self.root)
+        self._patch.start()
+
+    def tearDown(self) -> None:
+        self._patch.stop()
+        self._tmp.cleanup()
+
+    def _write_as(self, role: str | None, path: str) -> int:
+        payload = {"session_id": "s", "cwd": self.root,
+                   "tool_name": "Write", "tool_input": {"file_path": path}}
+        if role is not None:
+            payload["agent_id"] = "sub-1"
+            payload["agent_type"] = role
+        with mock.patch.object(hh, "_hook_input", return_value=payload), \
+             mock.patch.object(hh, "in_maintenance", return_value=False), \
+             redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
+            return hh.event_pre_tool_use()
+
+    def test_the_reviewer_does_not_edit_the_code_it_judges(self) -> None:
+        # reviewer.md has always said "Write only to write your report". Until
+        # now that was a sentence in a markdown file.
+        self.assertEqual(self._write_as("reviewer", "src/app.py"), 2)
+        self.assertEqual(self._write_as("reviewer", "tests/test_app.py"), 2)
+        self.assertEqual(self._write_as("reviewer", "progress/review_x.md"), hh.PASS)
+
+    def test_the_implementer_owns_the_code_and_not_the_requirement(self) -> None:
+        self.assertEqual(self._write_as("implementer", "src/app.py"), hh.PASS)
+        self.assertEqual(self._write_as("implementer", "tests/test_app.py"), hh.PASS)
+        self.assertEqual(self._write_as("implementer", "specs/REQ-001_x.md"), 2)
+
+    def test_the_analyst_owns_the_requirement_and_not_the_code(self) -> None:
+        self.assertEqual(self._write_as("analyst", "specs/REQ-001_x.md"), hh.PASS)
+        self.assertEqual(self._write_as("analyst", "docs/architecture.md"), hh.PASS)
+        self.assertEqual(self._write_as("analyst", "src/app.py"), 2)
+
+    def test_the_leader_coordinates_and_does_not_implement(self) -> None:
+        # The main thread is the leader in this repository (CLAUDE.md).
+        self.assertEqual(self._write_as(None, "progress/current.md"), hh.PASS)
+        self.assertEqual(self._write_as(None, "src/app.py"), 2)
+
+    def test_the_block_names_the_role_and_its_scope(self) -> None:
+        payload = {"session_id": "s", "agent_id": "sub-1", "agent_type": "reviewer",
+                   "tool_name": "Write", "tool_input": {"file_path": "src/app.py"}}
+        err = io.StringIO()
+        with mock.patch.object(hh, "_hook_input", return_value=payload), \
+             mock.patch.object(hh, "in_maintenance", return_value=False), \
+             redirect_stderr(err), redirect_stdout(io.StringIO()):
+            hh.event_pre_tool_use()
+        self.assertIn("you are the `reviewer`", err.getvalue())
+        self.assertIn("progress/", err.getvalue())
+
+    def test_an_unreadable_role_enforces_nothing(self) -> None:
+        # The safety valve. `agent_type` is a field Claude Code owns, not this
+        # repository; a version that stopped sending it must degrade to the old
+        # behaviour, never to blocking every write in the project.
+        self.assertIsNone(hh.caller_role({}))
+        self.assertIsNone(hh.caller_role({"agent_id": "x", "agent_type": "general-purpose"}))
+        for path in ("src/app.py", "specs/REQ-001_x.md", "tests/test_app.py"):
+            with self.subTest(path=path):
+                with mock.patch.object(hh, "_hook_input", return_value={
+                        "tool_name": "Write", "tool_input": {"file_path": path}}), \
+                     mock.patch.object(hh, "in_maintenance", return_value=False), \
+                     redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
+                    self.assertEqual(hh.event_pre_tool_use(), hh.PASS)
+
+    def test_the_core_zone_still_beats_every_role(self) -> None:
+        # No role owns the layer that verifies the work.
+        for role in ("leader", "implementer", "reviewer", "analyst"):
+            with self.subTest(role=role):
+                self.assertEqual(self._write_as(role, "scripts/harness_hook.py"), 2)
+
+
 class TestShellCorpus(unittest.TestCase):
     """The two lists this matcher exists to satisfy at the same time.
 
