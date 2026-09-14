@@ -22,10 +22,21 @@ import harness_hook as hh  # noqa: E402
 
 
 class TestStopEvent(unittest.TestCase):
-    def _run(self, returncode: int, stdout: str = "", hook_input: dict | None = None):
+    def _run(
+        self,
+        returncode: int,
+        stdout: str = "",
+        hook_input: dict | None = None,
+        pristine: bool = False,
+    ):
+        # `pristine=False` by default: these tests are about a real project. It
+        # has to be said out loud, because the repository the suite runs in is
+        # the template itself — left to the real check, every one of them would
+        # take the "nothing to close" path and stop testing what it claims to.
         result = mock.Mock(returncode=returncode, stdout=stdout, stderr="")
         err = io.StringIO()
         with mock.patch.object(hh.subprocess, "run", return_value=result) as run, \
+             mock.patch.object(hh, "_pristine_template", return_value=pristine), \
              mock.patch.object(hh, "_hook_input", return_value=hook_input or {}), \
              redirect_stderr(err), redirect_stdout(io.StringIO()):
             code = hh.event_stop()
@@ -54,11 +65,50 @@ class TestStopEvent(unittest.TestCase):
     def test_if_the_verifier_does_not_start_it_blocks(self) -> None:
         err = io.StringIO()
         with mock.patch.object(hh.subprocess, "run", side_effect=OSError("missing")), \
+             mock.patch.object(hh, "_pristine_template", return_value=False), \
              mock.patch.object(hh, "_hook_input", return_value={}), \
              redirect_stderr(err):
             code = hh.event_stop()
         self.assertEqual(code, 2)
         self.assertIn("could not run the verifier", err.getvalue())
+
+    def test_the_uninstantiated_template_does_not_block(self) -> None:
+        # Red is the expected state here: section 3 saying "NOT INSTANTIATED" is
+        # the verifier working. Blocking on it made the condition circular — no
+        # session on the template could close, and each one ended by writing a
+        # blocker note repeating what the verifier already said.
+        code, err, run = self._run(1, "[FAIL]  NOT INSTANTIATED\n", pristine=True)
+        self.assertEqual(code, hh.PASS)
+        self.assertEqual(err, "")
+        run.assert_not_called()
+
+    def test_once_instantiated_a_red_verifier_blocks_again(self) -> None:
+        # The exemption is for the template, not a way out of a red verifier.
+        code, err, _run = self._run(1, "[FAIL]  tests broken\n", pristine=False)
+        self.assertEqual(code, 2)
+        self.assertIn("tests broken", err)
+
+
+class TestPristineTemplate(unittest.TestCase):
+    """The exemption leans on validate_project_setup: check the wiring holds."""
+
+    # Deliberately NOT asserting on the repository's own state: these tests
+    # travel with the harness into every instantiated project, where the honest
+    # answer flips to False. What is worth pinning is the delegation, not which
+    # repo happens to be running the suite.
+
+    def test_a_pristine_repo_is_reported_as_the_template(self) -> None:
+        with mock.patch("validate_project_setup.check", return_value=([], [], True)):
+            self.assertTrue(hh._pristine_template())
+
+    def test_a_configured_project_is_not_pristine(self) -> None:
+        with mock.patch("validate_project_setup.check", return_value=([], [], False)):
+            self.assertFalse(hh._pristine_template())
+
+    def test_if_it_cannot_tell_it_assumes_a_project(self) -> None:
+        # Failing closed: an unreadable repo must keep blocking, not slip out.
+        with mock.patch("validate_project_setup.check", side_effect=OSError("boom")):
+            self.assertFalse(hh._pristine_template())
 
 
 class TestVerifierCommand(unittest.TestCase):

@@ -75,11 +75,33 @@ jobs:
         # If this stops exiting 2, the hooks go back to being decorative and
         # nobody notices until a session closes with the verifier red.
         run: |
+          # On the template itself the stop hook does NOT block: the verifier is
+          # red by design here, and blocking on it made the condition circular.
           set +e
           echo '{}' | python scripts/harness_hook.py stop
           code=$?
           set -e
-          [ "$code" -eq 2 ] || { echo "::error::the stop hook should block with 2, it exited $code"; exit 1; }
+          [ "$code" -eq 0 ] || { echo "::error::on the template the stop hook should let the turn close, it exited $code"; exit 1; }
+
+          # But that exemption has to be narrow, and this is the assertion that
+          # keeps it honest: on a repo with a project on it, red blocks again.
+          # Naming the project is enough to stop being `pristine`.
+          probe=$(mktemp -d)
+          cp -r . "$probe/repo"
+          python - "$probe/repo" <<'PY'
+          import json, sys
+          path = sys.argv[1] + "/feature_list.json"
+          with open(path, encoding="utf-8") as handle:
+              data = json.load(handle)
+          data["project"] = "ci-probe"
+          with open(path, "w", encoding="utf-8") as handle:
+              json.dump(data, handle, indent=2)
+          PY
+          set +e
+          (cd "$probe/repo" && echo '{}' | python scripts/harness_hook.py stop)
+          code=$?
+          set -e
+          [ "$code" -eq 2 ] || { echo "::error::on a real project the stop hook should block with 2, it exited $code"; exit 1; }
 
           set +e
           echo '{"tool_name":"Write","tool_input":{"file_path":"scripts/validate_requirements.py"}}' \
