@@ -271,6 +271,47 @@ class TestPreToolUse(unittest.TestCase):
         self.assertEqual(self._shell("cat scripts/validate_requirements.py")[0], hh.PASS)
         self.assertEqual(self._shell("python scripts/validate_requirements.py .")[0], hh.PASS)
 
+    def test_a_write_elsewhere_in_the_line_does_not_count(self) -> None:
+        # The write token and the protected path have to be in the same piece of
+        # the command. Before, they only had to appear somewhere in the same
+        # string, which blocked plenty of commands that wrote nothing.
+        cases = (
+            # A commit message quoting a path, and a `>` inside the trailer's
+            # email address. This is the one that actually showed up.
+            "git add scripts/harness_hook.py && git commit -m 'fix it'\n"
+            "Co-Authored-By: Someone <noreply@example.com>",
+            # Reading two things, one of them redirected.
+            "ls -la .github/workflows/ && find .claude -type f",
+            # A write, but to somewhere that is none of the hook's business.
+            "echo note > /tmp/scratch.txt && cat scripts/harness_hook.py",
+        )
+        for command in cases:
+            with self.subTest(command=command.splitlines()[0]):
+                self.assertEqual(self._shell(command)[0], hh.PASS)
+
+    def test_discarding_output_is_not_a_write(self) -> None:
+        # `2>&1` and `>/dev/null` carry a `>` but cannot touch a file in the
+        # repo. They used to be enough on their own to make a read look like a
+        # write.
+        for command in (
+            "python -m pytest scripts/tests -q 2>&1 | tail -15",
+            "cat scripts/harness_hook.py 2>/dev/null",
+            "ls scripts/ >/dev/null",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(self._shell(command)[0], hh.PASS)
+
+    def test_a_real_write_in_a_longer_line_still_blocks(self) -> None:
+        # The loosening must not become a way through: a genuine write to the
+        # protected zone blocks no matter what else is on the line.
+        for command in (
+            "cat README.md && echo x > scripts/harness_hook.py",
+            "python -m pytest -q 2>&1; rm -rf scripts/tests",
+            "git log --oneline | head -5 && sed -i 's/a/b/' init.sh",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(self._shell(command)[0], 2)
+
     def test_the_maintenance_mark_opens_the_door(self) -> None:
         with open(os.path.join(self.root, hh.MAINTENANCE_MARK), "w") as handle:
             handle.write("")
