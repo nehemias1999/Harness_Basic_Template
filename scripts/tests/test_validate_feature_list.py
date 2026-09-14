@@ -205,14 +205,38 @@ class TestClosingAFeature(FeatureListCase):
         self.create_reports(verdict="CHANGES_REQUESTED")
         self.assertErrorWith("requested changes", [feature(status="done")])
 
-    def test_done_with_a_review_that_says_nothing_fails(self) -> None:
+    def _review_saying(self, text: str) -> None:
         self.create_test_file()
         os.makedirs(os.path.join(self.root, "progress"), exist_ok=True)
         with open(os.path.join(self.root, "progress", "impl_a_feature.md"), "w") as h:
             h.write("# report\n")
         with open(os.path.join(self.root, "progress", "review_a_feature.md"), "w") as h:
-            h.write("# review\n\nLooks fine to me.\n")
-        self.assertErrorWith("does not say APPROVED", [feature(status="done")])
+            h.write(text)
+
+    def test_done_with_a_review_that_says_nothing_fails(self) -> None:
+        self._review_saying("# review\n\nLooks fine to me.\n")
+        self.assertErrorWith("no readable verdict line", [feature(status="done")])
+
+    def test_the_unedited_template_legend_is_not_an_approval(self) -> None:
+        # The reviewer template used to hand out `**Verdict:** APPROVED |
+        # CHANGES_REQUESTED`. Containment read that as an approval, so a reviewer
+        # who filled in nothing still closed the feature. No bad faith required —
+        # which is what made it worth a test of its own.
+        self._review_saying("# review\n\n**Verdict:** APPROVED | CHANGES_REQUESTED\n")
+        self.assertErrorWith("no readable verdict line", [feature(status="done")])
+
+    def test_an_explicit_rejection_is_not_an_approval(self) -> None:
+        # "APPROVED" is a substring of "NOT APPROVED".
+        self._review_saying("# review\n\n**Verdict:** CHANGES_REQUESTED\n\nThis is NOT APPROVED.\n")
+        self.assertErrorWith("requested changes", [feature(status="done")])
+
+    def test_the_word_approved_in_prose_is_not_a_verdict(self) -> None:
+        self._review_saying("# review\n\nEverything here could be APPROVED, honestly.\n")
+        self.assertErrorWith("no readable verdict line", [feature(status="done")])
+
+    def test_two_verdict_lines_disagreeing_is_not_an_approval(self) -> None:
+        self._review_saying("**Verdict:** APPROVED\n\n**Verdict:** CHANGES_REQUESTED\n")
+        self.assertErrorWith("no readable verdict line", [feature(status="done")])
 
     def test_a_properly_closed_feature_passes(self) -> None:
         self.close_properly()

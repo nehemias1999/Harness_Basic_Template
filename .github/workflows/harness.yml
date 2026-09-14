@@ -110,6 +110,18 @@ jobs:
           set -e
           [ "$code" -eq 2 ] || { echo "::error::pre-tool-use should block with 2, it exited $code"; exit 1; }
 
+          for payload in \
+            '{"tool_name":"Write","tool_input":{"file_path":"Scripts/validate_requirements.py"}}' \
+            '{"tool_name":"PowerShell","tool_input":{"command":"Set-Content scripts/x.py -Value y"}}' \
+            '{"tool_name":"Write","tool_input":{"file_path":".harness-maintenance"}}' \
+            '{"tool_name":"Write","tool_input":{"file_path":".github/workflows/harness.yml"}}' ; do
+            set +e
+            echo "$payload" | python scripts/harness_hook.py pre-tool-use
+            code=$?
+            set -e
+            [ "$code" -eq 2 ] || { echo "::error::should have blocked with 2, exited $code -- $payload"; exit 1; }
+          done
+
   windows:
     name: Windows (init.ps1)
     runs-on: windows-latest
@@ -143,6 +155,60 @@ jobs:
           # The step inherits the verifier's $LASTEXITCODE, which is 1 on
           # purpose. Without this, the job fails even when the checks pass.
           exit 0
+
+      # Everything below used to run on POSIX only, which left the Windows half
+      # of the harness asserted by nothing — on the platform this repo is
+      # primarily used from, and the platform whose branch of
+      # `verifier_command()` the hook actually takes.
+      - name: The validators, separately
+        run: |
+          python scripts/validate_feature_list.py feature_list.json
+          python scripts/validate_requirements.py .
+
+      - name: No dangling references
+        run: python scripts/validate_references.py .
+
+      - name: The hooks block
+        shell: bash
+        run: |
+          set +e
+          echo '{}' | python scripts/harness_hook.py stop
+          code=$?
+          set -e
+          [ "$code" -eq 0 ] || { echo "::error::on the template the stop hook should let the turn close, it exited $code"; exit 1; }
+
+          set +e
+          echo '{"tool_name":"Write","tool_input":{"file_path":"scripts/validate_requirements.py"}}' \
+            | python scripts/harness_hook.py pre-tool-use
+          code=$?
+          set -e
+          [ "$code" -eq 2 ] || { echo "::error::pre-tool-use should block with 2, it exited $code"; exit 1; }
+
+          # The case-folded match. On NTFS this is the very same file, so a
+          # case-sensitive guard protected one spelling of two.
+          set +e
+          echo '{"tool_name":"Write","tool_input":{"file_path":"Scripts/validate_requirements.py"}}' \
+            | python scripts/harness_hook.py pre-tool-use
+          code=$?
+          set -e
+          [ "$code" -eq 2 ] || { echo "::error::a capitalised path should block too, it exited $code"; exit 1; }
+
+          # The PowerShell tool. Its branch existed but the settings matcher
+          # never routed it, so on Windows it had never once run.
+          set +e
+          echo '{"tool_name":"PowerShell","tool_input":{"command":"Set-Content scripts/validate_requirements.py -Value x"}}' \
+            | python scripts/harness_hook.py pre-tool-use
+          code=$?
+          set -e
+          [ "$code" -eq 2 ] || { echo "::error::the PowerShell tool should block with 2, it exited $code"; exit 1; }
+
+          # The agent must not be able to install its own escape hatch.
+          set +e
+          echo '{"tool_name":"Write","tool_input":{"file_path":".harness-maintenance"}}' \
+            | python scripts/harness_hook.py pre-tool-use
+          code=$?
+          set -e
+          [ "$code" -eq 2 ] || { echo "::error::creating the maintenance mark should block, it exited $code"; exit 1; }
 
   parity:
     name: Section parity

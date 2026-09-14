@@ -54,9 +54,9 @@ ok = instantiate.ok
 warn = instantiate.warn
 fail = instantiate.fail
 
-# The switch that disarms the PreToolUse hook. It is ignored by git, but it is
-# the one ignored file that must NOT travel: carrying it into the next project
-# means starting with the harness's own protection turned off and nothing in
+# The switch that disarms the PreToolUse hook. It is untracked, and it is the one
+# untracked file that must NOT travel: carrying it into the next project means
+# starting with the harness's own protection turned off and nothing in
 # `git status` to say so.
 MAINTENANCE_MARK = ".harness-maintenance"
 
@@ -64,6 +64,8 @@ MAINTENANCE_MARK = ".harness-maintenance"
 # Deleting .git on Windows needs the read-only dance; it lives next to the
 # other instantiation logic so both scripts share one implementation.
 rmtree = instantiate.rmtree
+
+refuse_foreign_root = instantiate.refuse_foreign_root
 
 
 class Resetter:
@@ -128,6 +130,22 @@ class Resetter:
         """Reasons not to reset. `--force` skips these."""
         problems: list[str] = []
         if not self.has_git():
+            # Without git this script is at its most dangerous, not its least.
+            # Every safety layer below is keyed on git: the checks for
+            # uncommitted work, the stash check, the unpushed-commits check —
+            # and `backup_bundle`, which is the only way back. `inventory` also
+            # cannot tell an ignored file from a tracked one, so it marks the
+            # entire tree for deletion, `.env` and all.
+            #
+            # This used to `return []`: no objection, no --force, no backup.
+            # Somebody who downloaded the zip and worked for a month lost
+            # everything to a [WARN] that scrolled past.
+            problems.append(
+                "this folder is not a git repository, so NOTHING here can be "
+                "recovered afterwards: there is no history to bundle, nothing to "
+                "compare against, and every file (including ignored ones like "
+                ".env) is deleted"
+            )
             return problems
 
         # Porcelain is "XY path": two status columns, then the path. The
@@ -377,6 +395,12 @@ class Resetter:
                 return 0
 
             bundle = self.backup_bundle()
+            if bundle:
+                # Said here, before anything is deleted, and said again at the
+                # end. If instantiation fails below we return early, and the
+                # closing message never printed — leaving the user with their
+                # history gone and no idea where the only copy was.
+                ok(f"Backup of the previous history: {bundle}")
             stuck = self.wipe(doomed)
             self.restore(tree, kept)
             ok("workspace restored to the pristine template")
@@ -387,6 +411,11 @@ class Resetter:
 
         code = instantiate.Instantiator(self.root, self.instantiate_args(template_url, branch)).run()
         if code != 0:
+            if bundle:
+                print("")
+                fail("the workspace was reset but instantiation failed halfway.")
+                print(f"        Your previous history is in: {bundle}")
+                print(f"        Recover it with: git clone \"{bundle}\" recovered")
             return code
 
         for line in stuck:
@@ -477,6 +506,11 @@ def main(argv: list[str]) -> int:
             "--force together with --no-bundle: uncommitted work will be gone "
             "for good, with nothing to recover it from"
         )
+
+    problem = refuse_foreign_root(args.root)
+    if problem:
+        fail(problem)
+        return 1
 
     return Resetter(args.root, args).run()
 

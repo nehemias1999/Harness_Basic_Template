@@ -49,7 +49,11 @@ $Py = $null
 $PyVersion = $null
 $PyOk = $false
 
-foreach ($candidate in @("python", "py", "python3")) {
+# Same order as init.sh, deliberately. They used to disagree — `python, py,
+# python3` here against `python3, python, py` there — so a machine with an old
+# `python` and a modern `python3` failed on Windows and passed on POSIX, same
+# repo, opposite verdicts.
+foreach ($candidate in @("python3", "python", "py")) {
     if (-not (Get-Command $candidate -ErrorAction SilentlyContinue)) { continue }
     # Python strings use single quotes: PowerShell 5.1 eats the double quotes
     # when passing arguments to a native executable.

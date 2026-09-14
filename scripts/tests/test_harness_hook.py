@@ -9,6 +9,7 @@ harness whose hooks do not block gives a sense of control that does not exist.
 from __future__ import annotations
 
 import io
+import json
 import os
 import sys
 import tempfile
@@ -326,6 +327,312 @@ class TestPreToolUse(unittest.TestCase):
 
     def test_a_path_outside_the_repo_is_none_of_its_business(self) -> None:
         self.assertEqual(self._write("/tmp/other/scripts/thing.py")[0], hh.PASS)
+
+    def test_the_case_of_the_path_does_not_let_it_through(self) -> None:
+        # NTFS is case-insensitive: `Scripts/x.py` and `scripts/x.py` are the
+        # same file. A case-sensitive guard protected one spelling of the two,
+        # which is to say it protected neither.
+        for path in (
+            "Scripts/validate_requirements.py",
+            "SCRIPTS/validate_requirements.py",
+            ".CLAUDE/settings.json",
+            "Init.ps1",
+            "init.PS1",
+            "Agents.md",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self._write(path)[0], 2)
+
+    def test_the_bare_directory_name_counts_too(self) -> None:
+        # `mv scripts scripts_old` names the directory without a trailing slash,
+        # and moving the validators away is as good as editing them.
+        self.assertEqual(hh.protected_path("scripts"), "scripts/")
+        self.assertEqual(hh.protected_path(".github"), ".github/")
+
+    def test_it_blocks_writing_to_the_newly_covered_paths(self) -> None:
+        for path in (
+            ".github/workflows/harness.yml",
+            "reset.ps1",
+            "reset.sh",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self._write(path)[0], 2)
+
+    def test_the_agent_cannot_install_its_own_maintenance_door(self) -> None:
+        # One allowed Write used to disarm every protection below it, and a
+        # second removed the evidence.
+        code, err = self._write(hh.MAINTENANCE_MARK)
+        self.assertEqual(code, 2)
+        self.assertIn("does not let a tool create it", err)
+
+    def test_not_even_while_maintenance_is_already_open(self) -> None:
+        # Otherwise the door renews itself: declare once, keep it forever.
+        with open(os.path.join(self.root, hh.MAINTENANCE_MARK), "w") as handle:
+            handle.write("")
+        self.assertEqual(self._write(hh.MAINTENANCE_MARK)[0], 2)
+
+    def test_the_powershell_tool_is_treated_like_bash(self) -> None:
+        # The tool was missing from the settings matcher, so this branch had
+        # never run on a win32 repo where PowerShell is the primary shell.
+        blocked = self._run({
+            "tool_name": "PowerShell",
+            "tool_input": {"command": "Set-Content scripts/validate_requirements.py -Value x"},
+        })
+        self.assertEqual(blocked[0], 2)
+
+
+class TestAgentScopes(unittest.TestCase):
+    """The scope each agent file declares, actually applied."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = self._tmp.name
+        self._patch = mock.patch.object(hh, "REPO_ROOT", self.root)
+        self._patch.start()
+
+    def tearDown(self) -> None:
+        self._patch.stop()
+        self._tmp.cleanup()
+
+    def _write_as(self, role: str | None, path: str) -> int:
+        payload = {"session_id": "s", "cwd": self.root,
+                   "tool_name": "Write", "tool_input": {"file_path": path}}
+        if role is not None:
+            payload["agent_id"] = "sub-1"
+            payload["agent_type"] = role
+        with mock.patch.object(hh, "_hook_input", return_value=payload), \
+             mock.patch.object(hh, "in_maintenance", return_value=False), \
+             redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
+            return hh.event_pre_tool_use()
+
+    def test_the_reviewer_does_not_edit_the_code_it_judges(self) -> None:
+        # reviewer.md has always said "Write only to write your report". Until
+        # now that was a sentence in a markdown file.
+        self.assertEqual(self._write_as("reviewer", "src/app.py"), 2)
+        self.assertEqual(self._write_as("reviewer", "tests/test_app.py"), 2)
+        self.assertEqual(self._write_as("reviewer", "progress/review_x.md"), hh.PASS)
+
+    def test_the_implementer_owns_the_code_and_not_the_requirement(self) -> None:
+        self.assertEqual(self._write_as("implementer", "src/app.py"), hh.PASS)
+        self.assertEqual(self._write_as("implementer", "tests/test_app.py"), hh.PASS)
+        self.assertEqual(self._write_as("implementer", "specs/REQ-001_x.md"), 2)
+
+    def test_the_analyst_owns_the_requirement_and_not_the_code(self) -> None:
+        self.assertEqual(self._write_as("analyst", "specs/REQ-001_x.md"), hh.PASS)
+        self.assertEqual(self._write_as("analyst", "docs/architecture.md"), hh.PASS)
+        self.assertEqual(self._write_as("analyst", "src/app.py"), 2)
+
+    def test_the_leader_coordinates_and_does_not_implement(self) -> None:
+        # The main thread is the leader in this repository (CLAUDE.md).
+        self.assertEqual(self._write_as(None, "progress/current.md"), hh.PASS)
+        self.assertEqual(self._write_as(None, "src/app.py"), 2)
+
+    def test_the_block_names_the_role_and_its_scope(self) -> None:
+        payload = {"session_id": "s", "agent_id": "sub-1", "agent_type": "reviewer",
+                   "tool_name": "Write", "tool_input": {"file_path": "src/app.py"}}
+        err = io.StringIO()
+        with mock.patch.object(hh, "_hook_input", return_value=payload), \
+             mock.patch.object(hh, "in_maintenance", return_value=False), \
+             redirect_stderr(err), redirect_stdout(io.StringIO()):
+            hh.event_pre_tool_use()
+        self.assertIn("you are the `reviewer`", err.getvalue())
+        self.assertIn("progress/", err.getvalue())
+
+    def test_an_unreadable_role_enforces_nothing(self) -> None:
+        # The safety valve. `agent_type` is a field Claude Code owns, not this
+        # repository; a version that stopped sending it must degrade to the old
+        # behaviour, never to blocking every write in the project.
+        self.assertIsNone(hh.caller_role({}))
+        self.assertIsNone(hh.caller_role({"agent_id": "x", "agent_type": "general-purpose"}))
+        for path in ("src/app.py", "specs/REQ-001_x.md", "tests/test_app.py"):
+            with self.subTest(path=path):
+                with mock.patch.object(hh, "_hook_input", return_value={
+                        "tool_name": "Write", "tool_input": {"file_path": path}}), \
+                     mock.patch.object(hh, "in_maintenance", return_value=False), \
+                     redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
+                    self.assertEqual(hh.event_pre_tool_use(), hh.PASS)
+
+    def test_the_core_zone_still_beats_every_role(self) -> None:
+        # No role owns the layer that verifies the work.
+        for role in ("leader", "implementer", "reviewer", "analyst"):
+            with self.subTest(role=role):
+                self.assertEqual(self._write_as(role, "scripts/harness_hook.py"), 2)
+
+
+class TestShellCorpus(unittest.TestCase):
+    """The two lists this matcher exists to satisfy at the same time.
+
+    Inverting a guard is where holes hide, and over-tightening one is how it ends
+    up switched off. So both directions are pinned: real commands must keep
+    working, and every bypass the audit found must stay shut.
+    """
+
+    MUST_PASS = (
+        # Reading the harness — the reason the deny-list existed in the first
+        # place was to not get in the way of this.
+        "cat scripts/harness_hook.py",
+        "head -50 scripts/approve.py",
+        "grep -n 'def ' scripts/validate_requirements.py",
+        "sed -n '1,40p' scripts/approve.py",
+        "wc -l scripts/harness_hook.py",
+        "find scripts -name '*.py'",
+        "ls -la .claude/agents/",
+        # Running it.
+        "python scripts/validate_requirements.py .",
+        "python scripts/validate_feature_list.py feature_list.json",
+        "python -m unittest discover -s scripts/tests -q",
+        "python -m pytest scripts/tests -q",
+        "./init.sh --quiet",
+        # git that cannot rewrite the tree.
+        "git log --oneline -5",
+        "git diff scripts/harness_hook.py",
+        "git status --porcelain",
+        "git add scripts/harness_hook.py",
+        # Ordinary project work, which never names the zone at all.
+        "pytest tests/",
+        "npm test",
+        "python src/app.py",
+        "mkdir src/api",
+        "rm -rf build/",
+        # The false positive that started all this: a path in a commit message.
+        "git commit -m 'touch up scripts/harness_hook.py'",
+        # And output-discarding, which carries a `>` but writes nothing.
+        "python -m pytest scripts/tests -q 2>&1 | tail -15",
+        "cat scripts/harness_hook.py 2>/dev/null",
+    )
+
+    MUST_BLOCK = (
+        # The inline-code family: no path analysis can read what the code does.
+        'python -c "open(\'scripts/validate_requirements.py\',\'w\')"',
+        "perl -pi -e 's/x/y/' scripts/validate_requirements.py",
+        # Writers the old token list had never heard of.
+        "install -m644 /tmp/fake.py scripts/validate_requirements.py",
+        "dd of=scripts/validate_requirements.py if=/tmp/f",
+        "ln -sf /tmp/fake.py scripts/validate_requirements.py",
+        "sed --in-place 's/a/b/' init.sh",
+        "find scripts -name '*.py' -exec truncate -s0 {} +",
+        # The git-native family — the worst of them, because a transcript full of
+        # these looks like ordinary work and leaves a clean tree.
+        "git checkout HEAD~5 -- scripts/",
+        "git restore --source=HEAD~1 scripts/validate_requirements.py",
+        "git apply /tmp/evil.diff scripts/",
+        "git stash pop scripts/",
+        # Taking the whole directory away instead of editing it.
+        "mv scripts scripts_old",
+        "rm -rf scripts/tests",
+        # Moving the goalposts, including across tool calls: the Bash shell is
+        # persistent, so a `cd` taints commands this hook will never see.
+        "cd scripts",
+        # What the old list did catch, still caught.
+        "echo pass > scripts/validate_requirements.py",
+        "truncate -s0 init.sh",
+        "Set-Content scripts/harness_hook.py -Value y",
+    )
+
+    def test_real_commands_are_not_blocked(self) -> None:
+        for command in self.MUST_PASS:
+            with self.subTest(command=command):
+                self.assertIsNone(hh.inspect_command(command))
+
+    def test_every_bypass_the_audit_found_is_shut(self) -> None:
+        for command in self.MUST_BLOCK:
+            with self.subTest(command=command):
+                self.assertIsNotNone(hh.inspect_command(command))
+
+    def test_inline_code_is_named_as_such_however_many_lines_it_spans(self) -> None:
+        # Both forms always blocked. But the multi-line one was blocked by the
+        # wrong rule: the segment holding the code no longer carried the `-c`,
+        # so it was reported as an unknown verb. The outcome was right and the
+        # reason was misleading — and a misleading reason is how an agent ends up
+        # asking for the maintenance door instead of rephrasing the command.
+        single = "python -c \"open('scripts/approve.py','w')\""
+        multi = "python -c \"\nimport os\nos.remove('scripts/approve.py')\n\""
+        for command in (single, multi):
+            with self.subTest(command=command.splitlines()[0]):
+                verdict = hh.inspect_command(command)
+                self.assertIsNotNone(verdict)
+                self.assertIn("handed code on the command line", verdict[1])
+
+    def test_inline_code_that_never_names_the_zone_is_still_fine(self) -> None:
+        # The interpreter check is whole-command, so it must not become a blanket
+        # ban on `python -c`: without a protected path there is nothing to guard.
+        self.assertIsNone(hh.inspect_command("python -c \"print(1)\""))
+        self.assertIsNone(hh.inspect_command("python -c \"import json; print(json.dumps({}))\""))
+
+    def test_a_heredoc_into_an_interpreter_is_blocked(self) -> None:
+        # Checked against the whole command: a heredoc body ignores `;` and `&&`,
+        # so splitting into segments first is precisely how this used to pass.
+        self.assertIsNotNone(hh.inspect_command(
+            'python - <<EOF\nopen("scripts/validate_requirements.py","w").write("x")\nEOF'
+        ))
+
+    def test_a_command_that_never_names_the_zone_is_not_examined(self) -> None:
+        # This is what keeps the inversion affordable: the allow-list is only
+        # consulted for commands that mention the harness, so ordinary work
+        # cannot be blocked by any rule in it.
+        for command in ("dd of=/tmp/x if=/dev/zero", "curl -X POST https://example.com",
+                        "docker compose up -d", "rm -rf node_modules"):
+            with self.subTest(command=command):
+                self.assertIsNone(hh.inspect_command(command))
+
+    def test_the_maintenance_door_can_be_shut_but_not_opened(self) -> None:
+        # The asymmetry is the point. Opening it is an escalation; closing it
+        # only re-arms the guard. A version of this that trapped the session
+        # inside maintenance would have it exactly backwards — and did, briefly,
+        # until trying to end a real maintenance session ran into it.
+        for closing in ("rm .harness-maintenance", "rm ./.harness-maintenance",
+                        "rm -f .harness-maintenance",
+                        "Remove-Item .harness-maintenance -Force"):
+            with self.subTest(command=closing):
+                self.assertIsNone(hh.inspect_command(closing))
+
+        for opening in ("touch .harness-maintenance",
+                        "echo x > .harness-maintenance",
+                        "cp /tmp/x .harness-maintenance"):
+            with self.subTest(command=opening):
+                self.assertIsNotNone(hh.inspect_command(opening))
+
+        # And the delete exemption is for the mark alone, not cover for anything
+        # travelling with it.
+        self.assertIsNotNone(
+            hh.inspect_command("rm .harness-maintenance scripts/approve.py")
+        )
+
+    def test_audit_mode_reports_without_blocking(self) -> None:
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {hh.AUDIT_ENV: "1"}), \
+             mock.patch.object(hh, "in_maintenance", return_value=False), \
+             mock.patch.object(hh, "_hook_input", return_value={
+                 "tool_name": "Bash",
+                 "tool_input": {"command": "rm -rf scripts/tests"}}), \
+             redirect_stdout(out), redirect_stderr(io.StringIO()):
+            code = hh.event_pre_tool_use()
+        self.assertEqual(code, hh.PASS)
+        self.assertIn("would block", out.getvalue())
+
+
+class TestSettingsWiring(unittest.TestCase):
+    """The hook can only guard the tools the settings actually route to it."""
+
+    def _matchers(self) -> dict:
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        with open(os.path.join(root, ".claude", "settings.json"), encoding="utf-8") as handle:
+            settings = json.load(handle)
+        return {
+            event: [entry.get("matcher", "") for entry in entries]
+            for event, entries in settings["hooks"].items()
+        }
+
+    def test_pre_tool_use_covers_powershell(self) -> None:
+        # harness_hook.py has handled "PowerShell" all along; the settings never
+        # routed it, so the branch was dead code on the platform that needed it.
+        self.assertTrue(any("PowerShell" in m for m in self._matchers()["PreToolUse"]))
+
+    def test_post_tool_use_covers_every_writing_tool(self) -> None:
+        matchers = " ".join(self._matchers()["PostToolUse"])
+        for tool in hh.WRITING_TOOLS:
+            with self.subTest(tool=tool):
+                self.assertIn(tool, matchers)
 
 
 if __name__ == "__main__":

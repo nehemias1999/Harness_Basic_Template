@@ -284,6 +284,26 @@ class TestItRefuses(ResetCase):
         self.assertEqual(self.project_name(), "notes")
         self.assertTrue(self.exists("src/notes.py"))
 
+    def test_a_workspace_without_git_refuses_unless_forced(self) -> None:
+        # Without git this script is at its MOST dangerous, and it used to be at
+        # its least careful: preconditions returned [] outright, so there was no
+        # objection, no --force required, and `backup_bundle` produced nothing.
+        # `inventory` cannot tell ignored from tracked either, so the whole tree
+        # went — .env included. Somebody who downloaded the zip and worked for a
+        # month lost all of it to a [WARN] that scrolled past.
+        self.do_work()
+        rmtree(os.path.join(self.workspace, ".git"))
+
+        # --template-repo spelled out, because without .git there is no remote to
+        # read it from. This is exactly the shape of the dangerous case: somebody
+        # who has the harness as a plain folder and names the template by hand.
+        code, output = self.reset(template_repo=self.template_url)
+        self.assertEqual(code, 1)
+        self.assertIn("not a git repository", output)
+        self.assertIn("nothing here can be recovered", output.lower())
+        # And, above all: it did not touch a thing.
+        self.assertTrue(self.exists("src/notes.py"))
+
     def test_a_source_that_is_not_the_harness_touches_nothing(self) -> None:
         self.do_work()
         impostor = os.path.join(self.base, "impostor")

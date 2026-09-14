@@ -88,6 +88,37 @@ def has_tests(root: str) -> bool:
     return False
 
 
+VERDICT_LINE_RE = re.compile(r"^[ \t]*\**[ \t]*verdict[ \t]*\**[ \t]*:(.*)$", re.IGNORECASE | re.MULTILINE)
+VERDICTS = ("APPROVED", "CHANGES_REQUESTED")
+
+
+def read_verdict(content: str) -> str | None:
+    """The reviewer's verdict, or None if the report does not state one.
+
+    Substring containment was not good enough, and not only against bad faith.
+    The template in `.claude/agents/reviewer.md` hands the reviewer the line
+    `**Verdict:** APPROVED | CHANGES_REQUESTED`; a report that kept the legend
+    contained both words, and "APPROVED is in there somewhere" read it as an
+    approval. So did the phrase "this is NOT APPROVED".
+
+    The verdict is now a line that has to pick one. If the report states both, or
+    states neither, that is not an approval — it is a report to go back and
+    finish.
+    """
+    found: set[str] = set()
+    for match in VERDICT_LINE_RE.finditer(content):
+        rest = match.group(1).upper()
+        # "APPROVED" is not a substring of "CHANGES_REQUESTED", so a line naming
+        # both really is naming both — the unedited legend.
+        on_line = {verdict for verdict in VERDICTS if verdict in rest}
+        if len(on_line) != 1:
+            return None
+        found |= on_line
+    if len(found) != 1:
+        return None
+    return found.pop()
+
+
 def closing_reports(root: str, name: str) -> list[str]:
     """What a `done` feature is missing to really be closed.
 
@@ -115,10 +146,14 @@ def closing_reports(root: str, name: str) -> list[str]:
         missing.append(f"could not read progress/review_{name}.md: {exc}")
         return missing
 
-    if "CHANGES_REQUESTED" in content and "APPROVED" not in content:
+    verdict = read_verdict(content)
+    if verdict is None:
+        missing.append(
+            f"progress/review_{name}.md has no readable verdict line "
+            f'(expected one "**Verdict:** APPROVED" or "**Verdict:** CHANGES_REQUESTED")'
+        )
+    elif verdict != "APPROVED":
         missing.append(f"the reviewer requested changes in progress/review_{name}.md")
-    elif "APPROVED" not in content:
-        missing.append(f"progress/review_{name}.md does not say APPROVED anywhere")
     return missing
 
 
