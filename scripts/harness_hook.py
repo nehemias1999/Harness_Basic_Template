@@ -643,10 +643,32 @@ def inspect_command(raw: str) -> tuple[str, str] | None:
         prefix = mentions_protected(segment)
         if not prefix:
             continue
+        # Closing the maintenance door is always allowed — that is the whole
+        # asymmetry: the agent cannot open it and should be able to shut it. A
+        # guard that traps the session inside maintenance has it backwards.
+        if prefix == MAINTENANCE_MARK and closes_maintenance(segment):
+            continue
         why = read_only_shape(segment)
         if why:
             return prefix, why
     return None
+
+
+DELETE_VERBS = frozenset({"rm", "del", "erase", "unlink", "remove-item", "ri"})
+
+
+def closes_maintenance(segment: str) -> bool:
+    """Is this segment deleting the maintenance mark and nothing else?"""
+    words = [w for w in _words(segment) if w and not w.startswith("-")]
+    if not words:
+        return False
+    verb = os.path.basename(words[0].replace("\\", "/")).lower()
+    if verb not in DELETE_VERBS:
+        return False
+    targets = [w.strip("\"'").replace("\\", "/").lower() for w in words[1:]]
+    # `lstrip("./")` would eat the leading dot of `.harness-maintenance` itself.
+    targets = [t[2:] if t.startswith("./") else t for t in targets]
+    return bool(targets) and all(t == MAINTENANCE_MARK for t in targets)
 
 
 def _shell_reason(target: str, why: str) -> str:

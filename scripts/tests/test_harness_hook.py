@@ -555,6 +555,29 @@ class TestShellCorpus(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIsNone(hh.inspect_command(command))
 
+    def test_the_maintenance_door_can_be_shut_but_not_opened(self) -> None:
+        # The asymmetry is the point. Opening it is an escalation; closing it
+        # only re-arms the guard. A version of this that trapped the session
+        # inside maintenance would have it exactly backwards — and did, briefly,
+        # until trying to end a real maintenance session ran into it.
+        for closing in ("rm .harness-maintenance", "rm ./.harness-maintenance",
+                        "rm -f .harness-maintenance",
+                        "Remove-Item .harness-maintenance -Force"):
+            with self.subTest(command=closing):
+                self.assertIsNone(hh.inspect_command(closing))
+
+        for opening in ("touch .harness-maintenance",
+                        "echo x > .harness-maintenance",
+                        "cp /tmp/x .harness-maintenance"):
+            with self.subTest(command=opening):
+                self.assertIsNotNone(hh.inspect_command(opening))
+
+        # And the delete exemption is for the mark alone, not cover for anything
+        # travelling with it.
+        self.assertIsNotNone(
+            hh.inspect_command("rm .harness-maintenance scripts/approve.py")
+        )
+
     def test_audit_mode_reports_without_blocking(self) -> None:
         out = io.StringIO()
         with mock.patch.dict(os.environ, {hh.AUDIT_ENV: "1"}), \
