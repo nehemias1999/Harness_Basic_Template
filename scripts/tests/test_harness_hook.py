@@ -539,6 +539,26 @@ class TestShellCorpus(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIsNotNone(hh.inspect_command(command))
 
+    def test_inline_code_is_named_as_such_however_many_lines_it_spans(self) -> None:
+        # Both forms always blocked. But the multi-line one was blocked by the
+        # wrong rule: the segment holding the code no longer carried the `-c`,
+        # so it was reported as an unknown verb. The outcome was right and the
+        # reason was misleading — and a misleading reason is how an agent ends up
+        # asking for the maintenance door instead of rephrasing the command.
+        single = "python -c \"open('scripts/approve.py','w')\""
+        multi = "python -c \"\nimport os\nos.remove('scripts/approve.py')\n\""
+        for command in (single, multi):
+            with self.subTest(command=command.splitlines()[0]):
+                verdict = hh.inspect_command(command)
+                self.assertIsNotNone(verdict)
+                self.assertIn("handed code on the command line", verdict[1])
+
+    def test_inline_code_that_never_names_the_zone_is_still_fine(self) -> None:
+        # The interpreter check is whole-command, so it must not become a blanket
+        # ban on `python -c`: without a protected path there is nothing to guard.
+        self.assertIsNone(hh.inspect_command("python -c \"print(1)\""))
+        self.assertIsNone(hh.inspect_command("python -c \"import json; print(json.dumps({}))\""))
+
     def test_a_heredoc_into_an_interpreter_is_blocked(self) -> None:
         # Checked against the whole command: a heredoc body ignores `;` and `&&`,
         # so splitting into segments first is precisely how this used to pass.

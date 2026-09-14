@@ -631,13 +631,26 @@ def inspect_command(raw: str) -> tuple[str, str] | None:
     # and the dangling half read as a redirection into a file.
     command = NULL_REDIRECTS.sub(" ", raw.replace("\\", "/"))
 
-    # Heredocs are checked against the whole command, not per segment: the body
-    # does not respect `;` or `&&`, so splitting first is exactly how
-    # `python - <<EOF ... open("scripts/x.py","w") ... EOF` got through.
+    # Heredocs and inline code are judged against the whole command, not per
+    # segment. Both carry a body that ignores `;`, `&&` and newlines, so
+    # splitting first loses the context: a multi-line `python -c` was still
+    # blocked, but by the wrong rule — the segment holding the code no longer
+    # had the `-c` on it, so it was reported as an unknown verb rather than as
+    # inline code. Correct outcome, misleading reason, and a misleading reason is
+    # how an agent ends up asking for the maintenance door instead of rephrasing.
     if "<<" in command:
         prefix = mentions_protected(command)
         if prefix:
             return prefix, "a heredoc feeds text to a command, and the guard cannot read what it does with it"
+
+    interpreter = inline_code_interpreter(command)
+    if interpreter:
+        prefix = mentions_protected(command)
+        if prefix:
+            return prefix, (
+                f"`{interpreter}` is being handed code on the command line, and "
+                f"no path check can read what that code does"
+            )
 
     for segment in SEGMENT_SEPARATORS.split(command):
         prefix = mentions_protected(segment)
@@ -651,6 +664,21 @@ def inspect_command(raw: str) -> tuple[str, str] | None:
         why = read_only_shape(segment)
         if why:
             return prefix, why
+    return None
+
+
+def inline_code_interpreter(command: str) -> str | None:
+    """The interpreter being handed code on the command line, or None.
+
+    Looks at the raw command rather than a segment, because the code body is
+    free to contain the separators segments are split on.
+    """
+    words = [w for w in _words(command) if w]
+    for index, word in enumerate(words[:-1]):
+        verb = os.path.basename(word.replace("\\", "/").strip("\"'")).lower()
+        verb = verb[:-4] if verb.endswith(".exe") else verb
+        if verb in INTERPRETERS and words[index + 1].lower() in INLINE_CODE_FLAGS:
+            return verb
     return None
 
 
