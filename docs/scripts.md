@@ -592,6 +592,20 @@ signals (`>`, `rm`, `mv`, `sed -i`, `Remove-Item`…) over protected paths — a
 deliberately stays short: chasing every way of writing from `Bash` would mean
 constant false positives. It is still a net, not a cage.
 
+Two things keep that net off ordinary commands. **The pairing is local:** the
+command is split on `;`, `|`, `&` and newlines, and a write signal only counts
+against a protected path when both land in the same piece. Otherwise the two
+halves only had to appear *somewhere* in the same string, and a `git commit`
+whose message quoted a path — with a `>` in the email address of a
+`Co-Authored-By:` trailer — blocked. **And discarded output is not a write:**
+`2>&1`, `>/dev/null` and `>NUL` are stripped first, so `pytest scripts/tests
+2>&1 | tail` reads like the read it is.
+
+What still trips it is a genuine write signal next to a protected path in the
+same segment, even when it writes nothing — `git commit -m "touch up
+scripts/x.py > y"`, say. That residue is the price of a short heuristic, and
+the fix is the same as ever: rephrase, or declare maintenance.
+
 **How to maintain the harness itself.** The door exists, but you have to open
 it knowingly: create `.harness-maintenance` at the root (or export
 `HARNESS_MAINTENANCE=1`) and delete it when you are done. The difference from

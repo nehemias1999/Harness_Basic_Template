@@ -45,6 +45,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import unittest
@@ -234,6 +235,18 @@ WRITE_TOKENS = (
     "Set-Content", "Add-Content", "Out-File", "Remove-Item", "New-Item",
 )
 
+# Redirections that cannot write to a file in the repository: discarding output
+# and duplicating a descriptor. They carry a `>` and used to trip the check on
+# their own, so `... 2>&1` was enough to make a plain read look like a write.
+NULL_REDIRECTS = re.compile(r"\d?>>?\s*(?:&\d|/dev/null|NUL\b)", re.IGNORECASE)
+
+# Shell separators. Splitting on them keeps the pairing local: a write operator
+# only counts against a protected path when both land in the same piece of the
+# command. Without this the two halves only had to appear *somewhere* in the
+# same string, and a commit message that quoted a path — or a `>` inside the
+# email address of a trailer — was enough to block an ordinary `git commit`.
+SEGMENT_SEPARATORS = re.compile(r"[\n;|&]+")
+
 WRITING_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
 
 
@@ -296,16 +309,17 @@ def event_pre_tool_use() -> int:
         return _block(_reason(prefix)) if prefix else PASS
 
     if tool in ("Bash", "PowerShell"):
-        command = str(data.get("command", ""))
-        if not any(token in command for token in WRITE_TOKENS):
-            return PASS
-        for prefix in PROTECTED_ZONE:
-            if prefix in command.replace("\\", "/"):
-                return _block(
-                    _reason(prefix)
-                    + "\n(Spotted in a shell command: if you were only reading, "
-                    "rephrase it without write operators.)"
-                )
+        command = NULL_REDIRECTS.sub(" ", str(data.get("command", "")).replace("\\", "/"))
+        for segment in SEGMENT_SEPARATORS.split(command):
+            if not any(token in segment for token in WRITE_TOKENS):
+                continue
+            for prefix in PROTECTED_ZONE:
+                if prefix in segment:
+                    return _block(
+                        _reason(prefix)
+                        + "\n(Spotted in a shell command: if you were only reading, "
+                        "rephrase it without write operators.)"
+                    )
 
     return PASS
 
