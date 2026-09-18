@@ -8,7 +8,7 @@ order and report each step:
 1. **Green verifier.** Run `./init.ps1` (Windows) or `./init.sh` (POSIX). If it
    is red, **do not close**: report what fails and stop.
 2. **Feature status.** Check the verdict in `progress/review_<feature>.md`:
-   - `APPROVED` → `status: "done"` in `feature_list.json`.
+   - `APPROVED` → set `status: done` in the feature's note (`features/F-<id>_<name>.md`).
    - `CHANGES_REQUESTED` or no review → leave it `in_progress`, or `blocked` if
      there is a real blocker, and say so explicitly.
 3. **History.** Append an entry to `progress/history.md` in the format that
@@ -25,5 +25,5 @@ order and report each step:
 7. **Final summary** in 3-5 lines: what was closed, what is left, and the first
    step of the next session.
 
-**Files it touches:** `feature_list.json`, `progress/current.md`,
+**Files it touches:** the feature's note in `features/`, `progress/current.md`,
 `progress/history.md`. Never `src/`, `tests/` or `specs/`.

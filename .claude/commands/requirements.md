@@ -32,7 +32,7 @@ on each other.
    `/approve 1 2`, or `/approve-all`. You do not run it on your own.
 
 **Files it touches:** `specs/REQ-*.md`, `specs/_intake.md`,
-`docs/architecture.md` (draft), `feature_list.json` (draft features only),
+`docs/architecture.md` (draft), `features/` (draft feature notes only),
 `progress/intake_r<N>.md`, `progress/current.md`. Never `src/` or `tests/`.
 
 **A "sure, go ahead" in the chat approves nothing.** The approval is

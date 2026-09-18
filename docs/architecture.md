@@ -14,7 +14,7 @@
    - `<module_3>.py` — <responsibility>
 
    Do not introduce extra layers (services, repositories, ORMs) until there is
-   a concrete reason documented as a feature in `feature_list.json`.
+   a concrete reason documented as a feature note in `features/`.
 
 2. **No external dependencies.** Python stdlib only. If a feature needs a
    dependency, it is not installed on anyone's own initiative: the feature goes

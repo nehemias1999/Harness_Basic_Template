@@ -59,14 +59,15 @@ Exit codes
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import re
 import sys
 
+from features_io import parse_frontmatter, spec_basename
+import features_io
+
 SPEC_DIR = "specs"
 SPEC_FILE_RE = re.compile(r"^REQ-(\d{3})_[a-z0-9]+(?:_[a-z0-9]+)*\.md$")
-SPEC_POINTER_RE = re.compile(r"^specs/REQ-\d{3}_[a-z0-9]+(?:_[a-z0-9]+)*\.md$")
 # An unanswered question is any empty checkbox, however it is written:
 # "- [ ]", "- [  ]", "* []". Accepting a single spelling left a trivial way out
 # for approving a requirement full of holes.
@@ -92,8 +93,9 @@ REQUIRED_KEYS = ("id", "title", "status", "priority")
 
 # Anything that is NOT `draft` means somebody already worked on the feature.
 # It is defined by complement rather than as an allowlist on purpose: with an
-# allowlist, inventing a new status in `rules.valid_status` was enough for a
-# feature to escape the gate without any validator looking at it.
+# allowlist, inventing a new status was enough for a feature to escape the gate
+# without any validator looking at it. The valid statuses live in the code
+# (validate_features.py), not in a file the scope can edit.
 DRAFT = "draft"
 
 
@@ -105,42 +107,6 @@ def is_worked_on(status: object) -> bool:
 def _read(path: str) -> str:
     with open(path, encoding="utf-8") as handle:
         return handle.read()
-
-
-def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]] | None:
-    """Flat YAML front matter (`key: value`). None if absent or unterminated.
-
-    Returns (fields, repeated_keys). Deliberately minimal: the harness has no
-    external dependencies, so there is no PyYAML. In exchange, the spec template
-    requires flat keys.
-
-    `#` is not treated as a comment inside a value: a legitimate title can carry
-    a hash (`Fix bug #123`), and truncating it silently is worse than not
-    supporting inline comments.
-    """
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return None
-
-    fields: dict[str, str] = {}
-    repeated: list[str] = []
-    for line in lines[1:]:
-        if line.strip() == "---":
-            return fields, repeated
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        if ":" not in line:
-            continue
-        key, _, value = line.partition(":")
-        key = key.strip()
-        value = value.strip().strip("\"'")
-        if not key:
-            continue
-        if key in fields:
-            repeated.append(key)
-            continue
-        fields[key] = value
-    return None
 
 
 def spec_fingerprint(content: str) -> str:
@@ -284,44 +250,28 @@ def check(root: str) -> tuple[list[str], list[str]]:
             "is nothing to build. Start with /requirements"
         )
 
-    # --- feature_list.json --------------------------------------------------
-    try:
-        data = json.loads(_read(os.path.join(root, "feature_list.json")))
-    except (OSError, json.JSONDecodeError):
-        # The diagnosis is not duplicated: the shape of that file is section 4's
-        # job. But we carry on: whatever can be said about specs/ is still worth
-        # saying, and staying quiet would leave the human fixing problems one at
-        # a time.
-        fails.append("Could not read feature_list.json (see section 4)")
-        data = {}
-
-    features = data.get("features")
-    if not isinstance(features, list):
-        if data:
-            fails.append("\"features\" is not an array (see section 4)")
-        features = []
+    # --- features/ -----------------------------------------------------------
+    # The scope lives in `features/`, one note per feature. Format problems in
+    # the notes are section 4's job, but we carry on: whatever can be said about
+    # specs/ is still worth saying, and staying quiet would leave the human
+    # fixing problems one at a time.
+    features, feature_format_errors = features_io.load_features(root)
+    fails.extend(feature_format_errors)
 
     referenced: dict[str, list[dict]] = {}
     for feature in features:
-        if not isinstance(feature, dict):
-            continue
-
         label = f"feature {feature.get('id', '?')} {feature.get('name', '')}".strip()
         status = feature.get("status")
-        spec_path = feature.get("spec")
+        spec_value = feature.get("spec")
 
-        if not spec_path:
+        basename = spec_basename(spec_value)
+        if not basename:
             fails.append(
-                f"{label}: has no \"spec\" field. Every feature comes from a "
-                f"requirement in specs/"
+                f"{label}: has no \"spec\" field pointing at a requirement. "
+                f"Every feature comes from one in specs/"
             )
             continue
-        if not SPEC_POINTER_RE.match(str(spec_path)):
-            fails.append(
-                f"{label}: \"spec\" must be a specs/REQ-00N_name.md path "
-                f"(it says \"{spec_path}\")"
-            )
-            continue
+        spec_path = f"{SPEC_DIR}/{basename}.md"
 
         spec = specs.get(spec_path)
         if spec is None:
@@ -468,13 +418,10 @@ def main(argv: list[str]) -> int:
 
     specs, _ = load_specs(root)
     approved = sum(1 for s in specs.values() if s.get("status") == "approved")
-    try:
-        total_features = len(json.loads(_read(os.path.join(root, "feature_list.json")))["features"])
-    except (OSError, KeyError, TypeError, json.JSONDecodeError):
-        total_features = 0
+    features, _ = features_io.load_features(root)
     print(
         f"[OK]    {len(specs)} requirements ({approved} approved), "
-        f"{total_features} features traced"
+        f"{len(features)} features traced"
     )
     return 0
 

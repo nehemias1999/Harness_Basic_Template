@@ -10,7 +10,7 @@
 | `bootstrap.ps1` / `bootstrap.sh` | human | once, when instantiating a new project from the template |
 | `reset.ps1` / `reset.sh` | human | when the current project is finished and the folder is to host the next one |
 | `scripts/validate_project_setup.py` | `init.*` (and by hand) | blocks start-up if the project is not configured |
-| `scripts/validate_feature_list.py` | `init.*` (and by hand) | whenever the scope needs checking |
+| `scripts/validate_features.py` | `init.*` (and by hand) | whenever the scope needs checking |
 | `scripts/validate_requirements.py` | `init.*` (and by hand) | blocks work on an unapproved requirement |
 | `scripts/harness_hook.py` | `PostToolUse` and `Stop` hooks | automatic; they block with exit 2 |
 | `scripts/approve.py` | `/approve` and `/approve-all` | when the human signs requirements |
@@ -32,13 +32,13 @@ They are **the same verifier on two platforms**: same 7-section structure, same
 1. Environment        Python interpreter found and >= 3.9
 2. Base files         the files without which the harness does not work
 3. Configuration      delegates to scripts/validate_project_setup.py  (blocking)
-4. feature_list.json  delegates to scripts/validate_feature_list.py
+4. Validating features  delegates to scripts/validate_features.py
 5. Requirements       delegates to scripts/validate_requirements.py   (blocking)
 6. Tests              discovers and runs tests/
 7. Summary            verdict + exit code
 ```
 
-Section 5 comes **after** 4 on purpose: if `feature_list.json` is malformed,
+Section 5 comes **after** 4 on purpose: if the feature notes are malformed,
 the reader sees the shape error first rather than a cascade of traceability
 errors derived from it.
 
@@ -74,7 +74,8 @@ errors derived from it.
 | `This repository is the harness template, NOT INSTANTIATED` | run `./bootstrap.ps1 -Name "..."` |
 | `docs/architecture.md has unfilled placeholders` | ask the `analyst` for it (`/requirements`); it is the reviewer's criterion, without it no review is possible |
 | `is still "draft" (nobody approved that requirement)` | the human approves it with `/approve <id>`, or the feature goes back to `draft` |
-| `"rules.…" says … and the harness works with …` | somebody loosened a harness rule by editing `feature_list.json`: put it back |
+| `feature F-001 foo: status "in_progress" but specs/REQ-001_x.md is still "draft" (nobody approved that requirement)` | the human approves it with `/approve <id>`, or the feature goes back to `draft` |
+| `REQ-001_x: is approved but has no approved_hash` | approve it again with `/approve`: an approval with no fingerprint is no use as a trace |
 | `not a single test in tests/` | a `done` feature with no proof: write the tests or reopen the feature |
 | `approved_on … has to be a YYYY-MM-DD date` | put the real approval date in |
 | `the front matter repeats …` | the same key appears twice in the spec: keep one |
@@ -120,12 +121,13 @@ keeping them duplicated in PowerShell and bash guaranteed that one day they
 would say different things, which is the same reason the validators are shared
 Python modules. The wrappers only translate arguments and find the interpreter.
 
-What it touches: `feature_list.json` (name, description, **`features: []`**),
+What it touches: `features/_project.md` (name, description, **`features: []`**),
 the placeholders in `README.md` and in `docs/architecture.md`, `conventions.md`
 and `verification.md`, `progress/current.md`, `progress/history.md`, it deletes
 the leftover reports (`progress/explore_*.md`, `impl_*.md`, `review_*.md`,
-`intake_*.md`) and it **deletes every requirement in `specs/REQ-*.md`**,
-approved ones included.
+`intake_*.md`), it **deletes every requirement in `specs/REQ-*.md`**,
+approved ones included, and it deletes every feature note in `features/`
+(`F-*.md`, keeping the `_project.md` it just wrote).
 
 The list of files with placeholders is explicit on purpose: this file and
 `CHECKPOINTS.md` *talk about* the placeholders, so replacing them here would
@@ -233,8 +235,9 @@ see what came across.
    template's own URL: that would push the new project into the harness's
    repository.
 3. **Clone the template into a temporary folder**, outside the repository, and
-   check that what arrived really is the harness (`feature_list.json` with the
-   placeholder project, plus `scripts/instantiate.py`, `init.sh`, `AGENTS.md`).
+   check that what arrived really is the harness (`features/_project.md` with
+   the placeholder project, plus `scripts/instantiate.py`, `init.sh`,
+   `AGENTS.md`).
    **Nothing here is deleted until that copy exists and checks out**, so a
    wrong URL or a network failure leaves the current project exactly as it was.
 4. **Back up.** A `git bundle` with every ref — the stash and the uncommitted
@@ -273,7 +276,7 @@ git checkout template/main -- scripts/ docs/scripts.md init.sh init.ps1
 ./init.sh
 ```
 
-Pick the paths deliberately: `feature_list.json`, `specs/` and `progress/`
+Pick the paths deliberately: `features/`, `specs/` and `progress/`
 belong to your project and must not come from the template.
 
 ---
@@ -314,7 +317,7 @@ python scripts/validate_project_setup.py ../other
 
 **It blocks (`[FAIL]`)** when:
 
-- `feature_list.json` still carries the `project` placeholder.
+- `features/_project.md` still carries the `project` placeholder.
 - `docs/architecture.md` keeps `<...>` placeholders or its template note, and
   there is already a feature outside `draft`.
 - `README.md` keeps `<YOUR_PROJECT>` or `<PROJECT_DESCRIPTION>`.
@@ -333,21 +336,21 @@ Exit codes: `0` configured · `1` essential configuration missing.
 
 ---
 
-## `scripts/validate_feature_list.py` — validating the scope
+## `scripts/validate_features.py` — validating the scope
 
-It checks `feature_list.json`: required fields, types, unique ids and **names**,
-valid statuses and priorities, non-empty `acceptance`, and **at most one
-`in_progress` feature** (the harness's "one feature at a time" rule, made
-executable). Names have to be unique because the implementer's and the
-reviewer's reports are named after the feature's `name`: two identical ones
-overwrite each other's report.
+It reads the feature notes from `features/F-*.md` (the Obsidian vault), checks
+required fields, unique ids and **names**, valid statuses and priorities,
+non-empty `acceptance`, and **at most one `in_progress` feature** (the
+harness's "one feature at a time" rule, made executable). Names have to be
+unique because the implementer's and the reviewer's reports are named after the
+feature's `name`: two identical ones overwrite each other's report.
 
 It also makes closing a feature executable. For a feature to sit in `done`,
 both of its reports have to exist — `progress/impl_<name>.md` and
 `progress/review_<name>.md` — and the reviewer's has to say `APPROVED`; and
 `tests/` has to hold at least one test file (`require_tests_to_close`). Until
 now the cycle said "nobody approves their own work" but **no code ever looked
-at a verdict**: writing `done` in the JSON was enough. This does not make the
+at a verdict**: writing `done` in the note was enough. This does not make the
 review unforgeable — an agent writes it — but it forces the artefact to exist
 and to land in git, which is what makes it auditable afterwards.
 
@@ -355,24 +358,21 @@ And when everything is in order it prints **which feature comes next** by the
 work order, so that order stops depending on each agent reading the rule
 correctly.
 
-**The harness rules are not read from the JSON, they are checked against it.**
-`rules` describes how the harness works, and any agent can edit that file:
-reading the status vocabulary or the "one feature at a time" switch from there
-turned the rule into a suggestion — widening `valid_status` or setting
-`one_feature_at_a_time: false` was enough for the feature to stop being
-watched. If the JSON does not match the code's constants, that is a `[FAIL]`
-that says so.
+The harness rules (status vocabulary, work order, one-feature-at-a-time) are
+hard-coded in `validate_features.py` and `features_io.py`, not read from a
+scope file. No agent can widen `valid_status` or set
+`one_feature_at_a_time: false` by editing a note: the constants are in code.
 
 ```bash
-python scripts/validate_feature_list.py                  # feature_list.json
-python scripts/validate_feature_list.py other_file.json
+python scripts/validate_features.py                  # project root (.)
+python scripts/validate_features.py /other/repo
 ```
 
 Exit codes: `0` valid · `1` invalid. It prints one `[FAIL]` line per problem.
 
 It exists as a separate module on purpose: `init.ps1` and `init.sh` both invoke
-it, so the scope rules cannot drift apart between Windows and POSIX. The full
-format is described in `schema/feature_list.schema.json`.
+it, so the scope rules cannot drift apart between Windows and POSIX. The exact
+shape of a feature note is defined by `features/_template.md`.
 
 ---
 
@@ -384,8 +384,8 @@ criteria** exist; this one demands that **approved scope** exists.
 Why it is a script and not an instruction in a `.md`: approving a requirement
 has to survive a lost context window. So it does not live in the chat, it lives
 in two versioned files — `status: approved` in the spec's front matter and the
-`status` of its features in `feature_list.json` — and this module checks the
-two agree.
+`status` of its features in their notes under `features/` — and this module
+checks the two agree.
 
 ```bash
 python scripts/validate_requirements.py           # the current repo
@@ -511,8 +511,8 @@ fingerprint, and `_req_template.md` says outright that the table is not
 validated. So more features can be hung off an already-approved REQ, with
 different acceptance criteria, and everything stays green. **This is the one to
 watch by eye**, because it is the least visible: the verifier will happily report
-`1 requirements (1 approved), 9 features traced`. Read the feature list after an
-approval round, not just the specs.
+`1 requirements (1 approved), 9 features traced`. Read the feature notes after
+an approval round, not just the specs.
 
 **Status is a value, not a state machine.** No transition is validated — only the
 final value. `draft` straight to `done` is legal as long as the two reports exist
@@ -555,13 +555,11 @@ A project instantiated before the requirements layer comes out red as soon as
 it updates the harness, and rightly so: half the contract is missing. What to
 do, once:
 
-1. In `feature_list.json`, `rules` becomes:
-   ```json
-   "one_feature_at_a_time": true,
-   "require_tests_to_close": true,
-   "work_order": "priority_then_id",
-   "valid_status": ["draft", "pending", "in_progress", "done", "blocked"]
-   ```
+1. Port the old `feature_list.json` to the vault. The scope now lives in
+   `features/`, one note per feature, and `features/_project.md` holds the
+   project's name and description. Copy `features/_template.md` for each
+   feature, moving over `id`, `name`, `status`, `priority`, `acceptance` and
+   its `spec` pointer as a wikilink (`[[REQ-00N_name]]`).
 2. Every feature needs `spec` and `priority`. If the work is already done and
    there is no written requirement, write a retroactive one with
    `/requirements` covering what exists: it is more honest than inventing a
@@ -621,7 +619,7 @@ other. It is an exemption for the template, not a way out of a red verifier.
 
 `stop` and `post-edit` arrive once the write already happened. `PreToolUse`
 arrives before, and that is where the harness protects **the layer that does
-the verifying**: `scripts/`, `.claude/`, `schema/`, `init.*`, `bootstrap.*`,
+the verifying**: `scripts/`, `.claude/`, `init.*`, `bootstrap.*`,
 `AGENTS.md`, `CLAUDE.md` and `CHECKPOINTS.md`.
 
 The reason is concrete: an agent that sees red has a trivial way to turn it
@@ -690,17 +688,17 @@ agent's scope.
 
 | Agent | May write |
 |-------|-----------|
-| `leader` (the main thread, per `CLAUDE.md`) | `progress/`, `feature_list.json` |
-| `implementer` | `src/`, `tests/`, `progress/`, `feature_list.json` |
+| `leader` (the main thread, per `CLAUDE.md`) | `progress/`, `features/` |
+| `implementer` | `src/`, `tests/`, `progress/`, `features/` |
 | `reviewer` | `progress/` — its report, and nothing else |
-| `analyst` | `specs/`, `docs/architecture.md`, `progress/`, `feature_list.json` |
+| `analyst` | `specs/`, `docs/architecture.md`, `progress/`, `features/` |
 
 Two limits, both deliberate. If the caller's identity cannot be read, **no scope
 is enforced** — it degrades to the previous behaviour rather than blocking every
 write, because that field belongs to Claude Code, not to this repository.
 And field-level rules ("the leader may edit only the `status` field") are not
 expressible here: the hook sees a path, not a parsed document. Those stay where
-they already work, in `validate_feature_list.py` and `validate_requirements.py`.
+they already work, in `validate_features.py` and `validate_requirements.py`.
 
 **How to maintain the harness itself.** The door exists, but you have to open
 it knowingly: create `.harness-maintenance` at the root (or export

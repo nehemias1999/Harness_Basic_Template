@@ -6,14 +6,18 @@ were in there, a freshly instantiated project would come out "green" with tests
 that are not its own, and the harness would stop telling "unverified" apart from
 "verified".
 
+The features under test are written as notes (`features/F-<id>_<name>.md`) and
+read back through scripts/features_io.load_features, exactly as the validator
+does. Specs stay plain markdown notes in `specs/`.
+
 They are run by hand or from /harness-check:
 
     python -m unittest discover -s scripts/tests -v
 """
 from __future__ import annotations
 
-import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -40,6 +44,27 @@ round: 1
 
 {questions}
 """
+
+
+def _quote(value: object) -> str:
+    text = str(value)
+    if re.fullmatch(r"[A-Za-z0-9_.\-]+", text):
+        return text
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _frontmatter(fields: dict) -> str:
+    """The note's front matter, in the exact shape the templates use."""
+    lines = ["---"]
+    for key, value in fields.items():
+        if isinstance(value, list):
+            lines.append(f"{key}:")
+            for item in value:
+                lines.append(f'  - "{_quote(item)}"')
+        else:
+            lines.append(f"{key}: {_quote(value)}")
+    lines.append("---")
+    return "\n".join(lines) + "\n"
 
 
 def feature(**kwargs) -> dict:
@@ -71,11 +96,22 @@ class HarnessCase(unittest.TestCase):
         self._tmp.cleanup()
 
     # -- helpers ---------------------------------------------------------
-    def write_features(self, features: list[dict]) -> None:
-        payload = {"project": "test", "rules": {}, "features": features}
-        path = os.path.join(self.root, "feature_list.json")
+    def write(self, rel: str, content: str) -> None:
+        path = os.path.join(self.root, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8", newline="\n") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.write(content)
+
+    def write_features(self, features: list[dict]) -> None:
+        os.makedirs(os.path.join(self.root, "features"), exist_ok=True)
+        for feat in features:
+            fields = dict(feat)
+            fid = int(fields.pop("id"))
+            name = fields.pop("name")
+            note_fields = {"id": fid, "name": name, **fields}
+            rel = os.path.join(self.root, "features", f"F-{fid:03d}_{name}.md")
+            with open(rel, "w", encoding="utf-8", newline="\n") as h:
+                h.write(_frontmatter(note_fields) + "\n")
 
     def write_spec(
         self,
@@ -193,15 +229,18 @@ class TestTraceability(HarnessCase):
         without_spec = feature()
         del without_spec["spec"]
         self.write_features([without_spec])
-        self.assertFailsWith("has no \"spec\" field")
+        self.assertFailsWith('has no "spec" field')
 
     def test_a_dangling_pointer_fails(self) -> None:
         self.write_features([feature()])
         self.assertFailsWith("which does not exist")
 
     def test_a_badly_formatted_pointer_fails(self) -> None:
+        # validate_requirements does not check the spec format itself: if
+        # spec_basename cannot make a requirement name out of it, the feature
+        # has no working pointer.
         self.write_features([feature(spec="docs/something_else.md")])
-        self.assertFailsWith("must be a specs/REQ-00N_name.md path")
+        self.assertFailsWith("has no \"spec\" field pointing at a requirement")
 
     def test_approved_with_no_features_fails(self) -> None:
         self.write_spec(status="approved", approved_on="2026-09-10")
@@ -372,13 +411,12 @@ class TestAdversarialScenarios(HarnessCase):
         self.write_features([feature(status="in_progress")])
         self.assertFailsWith("nobody approved that requirement")
 
-    def test_an_unreadable_feature_list_does_not_silence_specs(self) -> None:
+    def test_an_unreadable_feature_note_does_not_silence_specs(self) -> None:
         self.write_spec(name="REQ-001 Bad Name.md")
-        with open(os.path.join(self.root, "feature_list.json"), "w") as handle:
-            handle.write("{ this is not json")
+        self.write("features/F-001_bad.md", "no front matter")
         fails, _ = self.check()
         self.assertTrue(any("does not follow" in f for f in fails), fails)
-        self.assertTrue(any("feature_list.json" in f for f in fails), fails)
+        self.assertTrue(any("has no front matter" in f for f in fails), fails)
 
     def test_a_mismatched_id_is_not_loaded(self) -> None:
         # It used to report the failure but keep using the spec for

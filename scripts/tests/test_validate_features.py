@@ -1,30 +1,48 @@
-"""Tests for scripts/validate_feature_list.py.
+"""Tests for scripts/validate_features.py.
 
 They live in `scripts/tests/` and not in `tests/` for the same reason as their
 neighbours: `tests/` belongs to the project, and the verifier discovers it. See
 the header of test_validate_requirements.py.
 
+The scope lives as one note per feature in `features/F-<id>_<name>.md`, so
+these tests write notes (flat YAML front matter, exactly as the templates do)
+instead of a JSON list, and call `validate(root)` on the directory.
+
     python -m unittest discover -s scripts/tests -v
 """
 from __future__ import annotations
 
-import json
 import os
+import re
 import sys
 import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import validate_feature_list as vfl  # noqa: E402
+import features_io  # noqa: E402
+import validate_features as vfl  # noqa: E402
 
 
-SANE_RULES = {
-    "one_feature_at_a_time": True,
-    "require_tests_to_close": True,
-    "work_order": "priority_then_id",
-    "valid_status": list(vfl.VALID_STATUS),
-}
+def _quote(value: object) -> str:
+    text = str(value)
+    if re.fullmatch(r"[A-Za-z0-9_.\-]+", text):
+        return text
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _frontmatter(fields: dict) -> str:
+    """The note's front matter, in the exact shape the templates use."""
+    lines = ["---"]
+    for key, value in fields.items():
+        if isinstance(value, list):
+            lines.append(f"{key}:")
+            for item in value:
+                lines.append(f'  - "{_quote(item)}"')
+        else:
+            lines.append(f"{key}: {_quote(value)}")
+    lines.append("---")
+    return "\n".join(lines) + "\n"
 
 
 def feature(**kwargs) -> dict:
@@ -33,7 +51,7 @@ def feature(**kwargs) -> dict:
         "name": "a_feature",
         "title": "A feature",
         "description": "What it does.",
-        "spec": "specs/REQ-001_a_requirement.md",
+        "spec": "[[REQ-001_a_requirement]]",
         "priority": "medium",
         "acceptance": ["does something verifiable"],
         "status": "draft",
@@ -46,20 +64,25 @@ class FeatureListCase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.root = self._tmp.name
+        self.features_dir = os.path.join(self.root, "features")
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
-    def write(self, features: list, rules: dict | None = None) -> str:
-        payload = {
-            "project": "test",
-            "rules": SANE_RULES if rules is None else rules,
-            "features": features,
-        }
-        path = os.path.join(self.root, "feature_list.json")
-        with open(path, "w", encoding="utf-8", newline="\n") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2)
-        return path
+    def write(self, features: list) -> None:
+        """Writes one note per feature: `features/F-{id:03d}_{name}.md`."""
+        os.makedirs(self.features_dir, exist_ok=True)
+        for feat in features:
+            fid = int(feat["id"])
+            name = feat["name"]
+            overrides = dict(feat.get("_fm", {}))
+            fields = {k: v for k, v in feat.items() if not k.startswith("_")}
+            fields["id"] = fid
+            fields["name"] = name
+            fields.update(overrides)
+            rel = os.path.join(self.features_dir, f"F-{fid:03d}_{name}.md")
+            with open(rel, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(_frontmatter(fields) + "\n")
 
     def create_test_file(self) -> None:
         os.makedirs(os.path.join(self.root, "tests"), exist_ok=True)
@@ -78,71 +101,45 @@ class FeatureListCase(unittest.TestCase):
         self.create_test_file()
         self.create_reports(name)
 
-    def errors(self, features: list, rules: dict | None = None) -> list[str]:
-        return vfl.validate(self.write(features, rules))
+    def errors(self, features: list) -> list[str]:
+        self.write(features)
+        return vfl.validate(self.root)
 
-    def assertErrorWith(self, needle: str, features: list, rules: dict | None = None) -> None:
-        errs = self.errors(features, rules)
+    def assertErrorWith(self, needle: str, features: list) -> None:
+        errs = self.errors(features)
         self.assertTrue(any(needle in e for e in errs), f"{needle!r} is not in {errs}")
 
 
 class TestHappyPath(FeatureListCase):
-    def test_an_empty_list_is_valid(self) -> None:
+    def test_an_empty_scope_is_valid(self) -> None:
         self.assertEqual(self.errors([]), [])
 
     def test_a_well_formed_feature(self) -> None:
         self.assertEqual(self.errors([feature()]), [])
 
     def test_work_order_is_priority_then_id(self) -> None:
-        features = [
-            feature(id=1, name="a", priority="critical", status="pending"),
-            feature(id=2, name="b", priority="high", status="pending"),
-            feature(id=3, name="c", priority="critical", status="pending"),
-            feature(id=4, name="d", priority="low", status="draft"),
-        ]
-        queue = [f["id"] for f in vfl.work_order(features)]
-        self.assertEqual(queue, [1, 3, 2])
-
-
-class TestHarnessRules(FeatureListCase):
-    """The JSON declares the rules; it does not decide them."""
-
-    def test_one_feature_at_a_time_cannot_be_switched_off(self) -> None:
-        rules = dict(SANE_RULES, one_feature_at_a_time=False)
-        self.assertErrorWith('"rules.one_feature_at_a_time"', [feature()], rules)
-
-    def test_switching_it_off_does_not_avoid_the_two_in_progress_error(self) -> None:
-        rules = dict(SANE_RULES, one_feature_at_a_time=False)
-        errs = self.errors(
+        self.write(
             [
-                feature(id=1, name="a", status="in_progress"),
-                feature(id=2, name="b", status="in_progress"),
-            ],
-            rules,
+                feature(id=1, name="a", priority="critical", status="pending"),
+                feature(id=2, name="b", priority="high", status="pending"),
+                feature(id=3, name="c", priority="critical", status="pending"),
+                feature(id=4, name="d", priority="low", status="draft"),
+            ]
         )
-        self.assertTrue(any("in_progress (max 1)" in e for e in errs), errs)
-
-    def test_statuses_cannot_be_invented(self) -> None:
-        rules = dict(SANE_RULES, valid_status=list(vfl.VALID_STATUS) + ["ready"])
-        self.assertErrorWith('"rules.valid_status"', [feature()], rules)
-
-    def test_an_invented_status_is_still_invalid(self) -> None:
-        rules = dict(SANE_RULES, valid_status=list(vfl.VALID_STATUS) + ["ready"])
-        self.assertErrorWith('invalid status "ready"', [feature(status="ready")], rules)
-
-    def test_rules_that_is_not_an_object(self) -> None:
-        self.assertErrorWith('"rules" must be an object', [], "a string")
-
-    def test_require_tests_to_close_does_not_switch_off(self) -> None:
-        rules = dict(SANE_RULES, require_tests_to_close=False)
-        self.assertErrorWith('"rules.require_tests_to_close"', [feature()], rules)
+        loaded, _ = features_io.load_features(self.root)
+        queue = [f["id"] for f in vfl.work_order(loaded)]
+        self.assertEqual(queue, [1, 3, 2])
 
 
 class TestFeatureShape(FeatureListCase):
     def test_a_required_field_is_missing(self) -> None:
-        without_spec = feature()
-        del without_spec["spec"]
-        self.assertErrorWith('the "spec" field is missing', [without_spec])
+        for key in ("title", "description", "spec", "priority", "status"):
+            without = feature()
+            del without[key]
+            self.assertErrorWith(f'the "{key}" field is missing', [without])
+        without_acceptance = feature()
+        del without_acceptance["acceptance"]
+        self.assertErrorWith('the "acceptance" field is missing', [without_acceptance])
 
     def test_duplicate_id(self) -> None:
         self.assertErrorWith(
@@ -154,29 +151,61 @@ class TestFeatureShape(FeatureListCase):
             "duplicate name", [feature(id=1, name="same"), feature(id=2, name="same")]
         )
 
-    def test_name_that_is_not_snake_case(self) -> None:
-        self.assertErrorWith("snake_case", [feature(name="A Feature")])
+    def test_a_file_name_that_is_not_snake_case(self) -> None:
+        self.write([])
+        with open(
+            os.path.join(self.features_dir, "F-001_A Feature.md"), "w", encoding="utf-8"
+        ) as handle:
+            handle.write(
+                _frontmatter(
+                    {
+                        "title": "x",
+                        "description": "y",
+                        "spec": "[[REQ-001_x]]",
+                        "priority": "high",
+                        "acceptance": ["ok"],
+                        "status": "draft",
+                    }
+                )
+            )
+            handle.write("\n")
+        errs = vfl.validate(self.root)
+        self.assertTrue(any("does not follow F-<id>_<name>.md" in e for e in errs), errs)
 
-    def test_id_that_is_not_an_integer(self) -> None:
-        self.assertErrorWith("integer >= 1", [feature(id="1")])
+    def test_the_file_name_is_the_authority_on_id(self) -> None:
+        # load_features rebuilds the id from the file name: a note whose front
+        # matter repeats it differently (here id: 2 in F-001_...) is loaded as
+        # the file says, so the scope stays coherent instead of flagging.
+        self.write([feature(_fm={"id": 2})])
+        loaded, _ = features_io.load_features(self.root)
+        self.assertEqual(loaded[0]["id"], 1)
+        self.assertEqual(vfl.validate(self.root), [])
+
+    def test_the_file_name_is_the_authority_on_name(self) -> None:
+        # Same rule for the name: the implementer's and the reviewer's reports
+        # are named after what the file says, not after the contradicted value.
+        self.write([feature(_fm={"name": "different"})])
+        loaded, _ = features_io.load_features(self.root)
+        self.assertEqual(loaded[0]["name"], "a_feature")
+        self.assertEqual(vfl.validate(self.root), [])
 
     def test_empty_title(self) -> None:
         self.assertErrorWith('"title" cannot be empty', [feature(title="   ")])
 
-    def test_spec_with_an_invalid_path(self) -> None:
+    def test_spec_that_points_nowhere_usable(self) -> None:
         self.assertErrorWith('"spec" must be a', [feature(spec="docs/other.md")])
 
     def test_invalid_priority(self) -> None:
         self.assertErrorWith("invalid priority", [feature(priority="super_urgent")])
+
+    def test_invalid_status(self) -> None:
+        self.assertErrorWith('invalid status "ready"', [feature(status="ready")])
 
     def test_empty_acceptance(self) -> None:
         self.assertErrorWith('"acceptance" must be an array', [feature(acceptance=[])])
 
     def test_acceptance_with_empty_criteria(self) -> None:
         self.assertErrorWith("criteria", [feature(acceptance=["fine", "  "])])
-
-    def test_feature_that_is_not_an_object(self) -> None:
-        self.assertErrorWith("is not an object", ["this is not a feature"])
 
 
 class TestClosingAFeature(FeatureListCase):
@@ -246,60 +275,33 @@ class TestClosingAFeature(FeatureListCase):
         self.assertEqual(self.errors([feature(status="pending")]), [])
 
 
-class TestTheSchemaDoesNotDrift(unittest.TestCase):
-    """The schema is documentation and nobody loads it: without this, it drifts.
+class TestTheScopeNotes(FeatureListCase):
+    """The scope notes themselves: the files validate() sees."""
 
-    `schema/feature_list.schema.json` describes the format and
-    `validate_feature_list.py` enforces it. They are two sources of truth, and
-    the only way they will not say different things in six months is to compare
-    them here.
-    """
+    def test_the_template_notes_are_not_features(self) -> None:
+        self.write([])
+        for name in ("_project.md", "_template.md"):
+            with open(os.path.join(self.features_dir, name), "w", encoding="utf-8") as h:
+                h.write("---\ntitle: template\n---\n")
+        self.assertEqual(vfl.validate(self.root), [])
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        with open(os.path.join(root, "schema", "feature_list.schema.json"), encoding="utf-8") as h:
-            cls.schema = json.load(h)
-        cls.feature = cls.schema["definitions"]["feature"]
+    def test_missing_features_directory(self) -> None:
+        errs = vfl.validate(self.root)
+        self.assertTrue(any("features/ does not exist yet" in e for e in errs), errs)
 
-    def test_the_statuses_match(self) -> None:
-        self.assertEqual(
-            self.feature["properties"]["status"]["enum"], list(vfl.VALID_STATUS)
-        )
+    def test_a_note_with_no_front_matter_fails(self) -> None:
+        self.write([])
+        with open(os.path.join(self.features_dir, "F-001_plain.md"), "w", encoding="utf-8") as h:
+            h.write("just a note, no front matter\n")
+        errs = vfl.validate(self.root)
+        self.assertTrue(any("has no front matter, or it is not closed with ---" in e for e in errs), errs)
 
-    def test_the_priorities_match(self) -> None:
-        self.assertEqual(
-            self.feature["properties"]["priority"]["enum"], list(vfl.PRIORITIES)
-        )
-
-    def test_the_required_fields_match(self) -> None:
-        self.assertEqual(
-            sorted(self.feature["required"]), sorted(vfl.REQUIRED_FEATURE_KEYS)
-        )
-
-    def test_the_patterns_match(self) -> None:
-        self.assertEqual(self.feature["properties"]["name"]["pattern"], vfl.NAME_RE.pattern)
-        self.assertEqual(self.feature["properties"]["spec"]["pattern"], vfl.SPEC_RE.pattern)
-
-    def test_the_declared_rules_are_in_the_schema(self) -> None:
-        declared = set(self.schema["properties"]["rules"]["properties"])
-        self.assertTrue(
-            set(vfl.FIXED_RULES).issubset(declared),
-            f"the schema does not declare {set(vfl.FIXED_RULES) - declared}",
-        )
-
-
-class TestTheFile(FeatureListCase):
-    def test_missing_file(self) -> None:
-        errs = vfl.validate(os.path.join(self.root, "does_not_exist.json"))
-        self.assertEqual(len(errs), 1)
-        self.assertIn("does not exist", errs[0])
-
-    def test_invalid_json(self) -> None:
-        path = os.path.join(self.root, "feature_list.json")
-        with open(path, "w", encoding="utf-8") as handle:
-            handle.write("{ broken")
-        self.assertIn("is not valid JSON", vfl.validate(path)[0])
+    def test_an_unterminated_front_matter_fails(self) -> None:
+        self.write([])
+        with open(os.path.join(self.features_dir, "F-001_plain.md"), "w", encoding="utf-8") as h:
+            h.write("---\nid: 1\n")
+        errs = vfl.validate(self.root)
+        self.assertTrue(any("not closed with ---" in e for e in errs), errs)
 
 
 if __name__ == "__main__":

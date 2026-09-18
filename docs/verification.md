@@ -87,8 +87,8 @@ rm "${TMPDIR:-/tmp}/smoke_state.json"
 ```
 
 If the verifier is red, do **not** mark anything as `done`. Record the blocker
-in `progress/current.md` and leave the feature `blocked` in
-`feature_list.json`.
+in `progress/current.md` and leave the feature `blocked` in its note under
+`features/`.
 
 Watch out for one case the verifier distinguishes on purpose: **0 tests is a
 `[WARN]`, not an `[OK]`**. A repo with no tests is not green, it is

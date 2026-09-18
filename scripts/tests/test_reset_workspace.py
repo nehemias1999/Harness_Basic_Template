@@ -12,7 +12,6 @@ the suite never touches the network and never touches a real remote.
 from __future__ import annotations
 
 import io
-import json
 import os
 import shutil
 import subprocess
@@ -35,6 +34,8 @@ HARNESS_FILES = {
     "README.md": "# <YOUR_PROJECT>\n\n> <PROJECT_DESCRIPTION>\n",
     "AGENTS.md": "# AGENTS\n",
     "init.sh": "#!/usr/bin/env bash\necho ok\n",
+    "features/_project.md": "---\nproject: <YOUR_PROJECT>\ndescription:\n---\n",
+    "features/_template.md": "# feature template\n",
     "docs/architecture.md": "# Architecture of <YOUR_PROJECT>\n",
     "docs/conventions.md": "# Conventions\n",
     "docs/verification.md": "# Verification\n",
@@ -95,11 +96,6 @@ class ResetCase(unittest.TestCase):
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w", encoding="utf-8", newline="\n") as handle:
                 handle.write(content)
-        with open(os.path.join(seed, "feature_list.json"), "w", encoding="utf-8") as handle:
-            json.dump(
-                {"project": "<YOUR_PROJECT>", "description": "", "rules": {}, "features": []},
-                handle,
-            )
         self.git("init", "--quiet", "-b", "main", cwd=seed)
         self.git("add", "-A", cwd=seed)
         self.git("commit", "--quiet", "-m", "harness", cwd=seed)
@@ -138,8 +134,14 @@ class ResetCase(unittest.TestCase):
         return os.path.exists(os.path.join(self.workspace, rel))
 
     def project_name(self) -> str:
-        with open(os.path.join(self.workspace, "feature_list.json"), encoding="utf-8") as handle:
-            return json.load(handle)["project"]
+        with open(
+            os.path.join(self.workspace, "features", "_project.md"),
+            encoding="utf-8",
+        ) as handle:
+            for line in handle:
+                if line.startswith("project:"):
+                    return line.split(":", 1)[1].strip()
+        return ""
 
     def commit_all(self, message: str = "work") -> None:
         self.git("add", "-A")

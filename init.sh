@@ -74,8 +74,9 @@ ok "Compatible Python version"
 echo ""
 echo "── 2. Checking the harness base files ──────────────────"
 
-for f in AGENTS.md CLAUDE.md CHECKPOINTS.md README.md feature_list.json \
-         progress/current.md progress/history.md specs/_req_template.md \
+for f in AGENTS.md CLAUDE.md CHECKPOINTS.md README.md features/_project.md \
+         features/_template.md progress/current.md progress/history.md \
+         specs/_req_template.md \
          docs/architecture.md docs/conventions.md docs/verification.md docs/scripts.md; do
   if [ ! -f "$f" ]; then
     fail "Base file missing: $f"
@@ -100,14 +101,14 @@ else
 fi
 
 echo ""
-echo "── 4. Validating feature_list.json ─────────────────────"
+echo "── 4. Validating features ───────────────────────────"
 
-if [ -f "scripts/validate_feature_list.py" ]; then
-  if ! $PY scripts/validate_feature_list.py feature_list.json; then
+if [ -f "scripts/validate_features.py" ]; then
+  if ! $PY scripts/validate_features.py .; then
     EXIT_CODE=1
   fi
 else
-  fail "scripts/validate_feature_list.py is missing — cannot validate the scope"
+  fail "scripts/validate_features.py is missing — cannot validate the scope"
   EXIT_CODE=1
 fi
 

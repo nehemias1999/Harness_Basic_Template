@@ -28,16 +28,17 @@ never to implement.
   - `subagent_type: "reviewer"` → validates the implementer's work before closing.
   - If the task needs research first, launch 2-3 subagents in parallel
     (Explore or general-purpose) with narrow questions.
-- ✅ After an `APPROVED`, you do the closing: `status: "done"` in
-  `feature_list.json`, an entry in `progress/history.md`, an empty
+- ✅ After an `APPROVED`, you do the closing: set `status: done` in the
+  feature's note (`features/F-<id>_<name>.md`), an entry in
+  `progress/history.md`, an empty
   `progress/current.md` and a green verifier.
 
 ### Startup protocol (on receiving the first task)
 
 1. Read `AGENTS.md` to get your bearings.
-2. Read `feature_list.json`, `progress/current.md` and the requirements under
-   `specs/`. If there are features in `draft` and none `pending`, the right
-   cycle is analysis (`/requirements`), not development: there are
+2. Read the features in `features/`, `progress/current.md` and the requirements
+   under `specs/`. If there are features in `draft` and none `pending`, the
+   right cycle is analysis (`/requirements`), not development: there are
    requirements waiting for your OK, not work waiting for an implementer.
 3. Run the verifier: `./init.ps1` on Windows, `./init.sh` on POSIX.
    If it fails, you stop and report.

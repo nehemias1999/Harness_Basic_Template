@@ -1,4 +1,4 @@
-"""Validates feature_list.json against the harness rules.
+"""Validates the feature notes in features/ against the harness rules.
 
 Purpose
     Check that the project scope is in a coherent state before letting a session
@@ -9,13 +9,20 @@ Purpose
     the requirement it comes from (specs/) is checked by
     scripts/validate_requirements.py: one error, one cause.
 
-Why the harness rules are not read from the JSON
-    `rules` describes how the harness works, and any agent with write access can
-    edit that file. Reading the status vocabulary or the "one feature at a time"
-    switch from there turned the rule into a suggestion: widening `valid_status`
-    or setting `one_feature_at_a_time: false` was enough. The rules now live in
-    the code and what this validator does is check that the JSON **matches**
-    them; if somebody changed them, that is an explicit `[FAIL]`.
+Where the features live
+    One note per feature, `features/F-<id>_<name>.md`, with flat front matter
+    plus two list-valued keys (`acceptance`, `tags`) and a `spec` wikilink to
+    `specs/`. The template notes (`features/_project.md`, `features/_template.md`)
+    start with `_` and are not features. Reading and writing the notes is done
+    through scripts/features_io.py, so the validator, the approver and the
+    bootstrap never drift apart on the shape of the file.
+
+Why the harness rules are not configuration
+    The template's `features/_project.md` used to be `feature_list.json`, and the
+    file carried a `rules` block. Reading the status vocabulary or the
+    "one feature at a time" switch from there turned the rule into a suggestion:
+    widening `valid_status` or setting `one_feature_at_a_time: false` was enough.
+    The rules now live in the code, and nothing in the notes can switch them off.
 
 Who runs it
     `init.ps1` and `init.sh` (section 4). Both call this same module so the
@@ -23,22 +30,24 @@ Who runs it
     POSIX. You can also run it by hand.
 
 Usage
-    python scripts/validate_feature_list.py [path]     # defaults to feature_list.json
+    python scripts/validate_features.py [root]     # defaults to the current dir
 
 Output
     One line per check, prefixed [OK] / [FAIL], and when everything is in order,
     which feature comes next according to the work order.
 
 Exit codes
-    0  the file is valid
-    1  the file is invalid (or could not be read)
+    0  the scope is valid
+    1  the scope is invalid (or features/ could not be read)
 """
 from __future__ import annotations
 
-import json
 import os
 import re
 import sys
+
+import features_io
+from features_io import FEATURE_FILE_RE, spec_basename
 
 VALID_STATUS = ("draft", "pending", "in_progress", "done", "blocked")
 PRIORITIES = ("critical", "high", "medium", "low")
@@ -52,15 +61,10 @@ REQUIRED_FEATURE_KEYS = (
     "acceptance",
     "status",
 )
-NAME_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
-SPEC_RE = re.compile(r"^specs/REQ-\d{3}_[a-z0-9]+(?:_[a-z0-9]+)*\.md$")
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-# Harness rules the JSON may declare but not change.
-FIXED_RULES = {
-    "one_feature_at_a_time": True,
-    "require_tests_to_close": True,
-    "work_order": "priority_then_id",
-}
+# A note may only use lists for these keys; a scalar (`key: value`) elsewhere.
+LIST_KEYS = ("acceptance", "tags")
 
 
 def priority_rank(priority: object) -> int:
@@ -123,7 +127,7 @@ def closing_reports(root: str, name: str) -> list[str]:
     """What a `done` feature is missing to really be closed.
 
     The cycle says a feature closes after the reviewer's APPROVED, but until now
-    no code ever looked at that verdict: writing "done" in the JSON was enough.
+    no code ever looked at that verdict: writing "done" in a note was enough.
     This does not make the review unforgeable — an agent writes the report — but
     it forces the artefact to exist and to land in git, which is what makes it
     auditable afterwards.
@@ -157,123 +161,127 @@ def closing_reports(root: str, name: str) -> list[str]:
     return missing
 
 
-def _validate_rules(rules: object) -> list[str]:
-    """Checks that nobody loosened the harness rules from the JSON."""
+def _validate_note(feature: dict, seen_ids: set, seen_names: set) -> list[str]:
     errors: list[str] = []
-    if not isinstance(rules, dict):
-        return ['"rules" must be an object']
+    label = f"feature {feature['id']} {feature['name']}"
+    fields = {key: value for key, value in feature.items() if not key.startswith("_")}
 
-    declared = rules.get("valid_status")
-    if declared is not None and list(declared) != list(VALID_STATUS):
-        errors.append(
-            '"rules.valid_status" does not match the harness statuses '
-            f"({', '.join(VALID_STATUS)}). Inventing or removing statuses from the "
-            "JSON does not change the rules, it only breaks the validation"
+    # The file name is the authority on id and name: F-<id>_<name>.md. The note
+    # may repeat them, and when it does they have to agree.
+    declared_id = fields.get("id")
+    if declared_id is not None:
+        id_matches = (
+            str(declared_id).strip().isdigit()
+            and int(str(declared_id).strip()) == feature["id"]
         )
-
-    for key, expected in FIXED_RULES.items():
-        value = rules.get(key)
-        if value is not None and value != expected:
+        if not id_matches:
             errors.append(
-                f'"rules.{key}" says {value!r} and the harness works with {expected!r}. '
-                f"That rule is not switched off by editing the JSON"
+                f'{label}: "id" says "{declared_id}" and the file name says '
+                f'{feature["id"]} (F-<id>_<name>.md). Keep one truth'
             )
-    return errors
 
-
-def _validate_feature(feature: object, index: int, seen_ids: set, seen_names: set) -> list[str]:
-    errors: list[str] = []
-    if not isinstance(feature, dict):
-        return [f"feature #{index} is not an object"]
-
-    label = f"feature {feature.get('id', f'#{index}')}"
+    declared_name = fields.get("name")
+    if declared_name is not None and str(declared_name) != feature["name"]:
+        errors.append(
+            f'{label}: "name" says "{declared_name}" and the file name says '
+            f'"{feature["name"]}". The implementer\'s and the reviewer\'s reports '
+            f"are named after the feature, so one of the two has to give"
+        )
 
     for key in REQUIRED_FEATURE_KEYS:
-        if key not in feature:
+        if key not in fields or fields[key] in ("", [], None):
+            if key in ("id", "name"):
+                continue  # always present, derived from the file name
             errors.append(f'{label}: the "{key}" field is missing')
 
-    feature_id = feature.get("id")
-    if "id" in feature and (not isinstance(feature_id, int) or feature_id < 1):
-        errors.append(f'{label}: "id" must be an integer >= 1')
-    if feature_id in seen_ids:
+    if feature["id"] in seen_ids:
         errors.append(f"{label}: duplicate id")
-    seen_ids.add(feature_id)
+    seen_ids.add(feature["id"])
 
-    name = feature.get("name")
-    if "name" in feature:
-        if not isinstance(name, str) or not NAME_RE.match(name):
-            errors.append(f'{label}: "name" must be snake_case (it says "{name}")')
-        elif name in seen_names:
-            # The implementer's and the reviewer's reports are named after the
-            # feature's `name`: two identical features overwrite each other's.
-            errors.append(f'{label}: duplicate name "{name}"')
-        else:
-            seen_names.add(name)
+    if feature["name"] in seen_names:
+        # The implementer's and the reviewer's reports are named after the
+        # feature's `name`: two identical features overwrite each other's.
+        errors.append(f'{label}: duplicate name "{feature["name"]}"')
+    else:
+        seen_names.add(feature["name"])
 
     for key in ("title", "description"):
-        value = feature.get(key)
-        if key in feature and (not isinstance(value, str) or not value.strip()):
+        value = fields.get(key)
+        if value is not None and (not isinstance(value, str) or not value.strip()):
             errors.append(f'{label}: "{key}" cannot be empty')
 
-    spec = feature.get("spec")
-    if "spec" in feature and (not isinstance(spec, str) or not SPEC_RE.match(spec)):
+    spec = fields.get("spec")
+    if spec is not None and spec_basename(spec) is None:
         errors.append(
-            f'{label}: "spec" must be a specs/REQ-00N_name.md path (it says "{spec}")'
+            f'{label}: "spec" must be a specs/REQ-00N_name.md path or a '
+            f"[[REQ-00N_name]] wikilink (it says \"{spec}\")"
         )
 
-    priority = feature.get("priority")
-    if "priority" in feature and priority not in PRIORITIES:
+    priority = fields.get("priority")
+    if priority is not None and priority not in PRIORITIES:
         errors.append(
             f'{label}: invalid priority "{priority}" (use: {", ".join(PRIORITIES)})'
         )
 
-    status = feature.get("status")
+    status = fields.get("status")
     if status is not None and status not in VALID_STATUS:
         errors.append(f'{label}: invalid status "{status}"')
 
-    acceptance = feature.get("acceptance")
+    acceptance = fields.get("acceptance")
     if acceptance is not None:
         if not isinstance(acceptance, list) or not acceptance:
             errors.append(f'{label}: "acceptance" must be an array with at least one criterion')
         elif any(not isinstance(c, str) or not c.strip() for c in acceptance):
             errors.append(f'{label}: there are empty or non-text "acceptance" criteria')
 
+    for key in ("created", "updated"):
+        value = fields.get(key)
+        if value is not None and not DATE_RE.match(str(value)):
+            errors.append(f'{label}: "{key}" says "{value}" and it has to be a YYYY-MM-DD date')
+
+    tags = fields.get("tags")
+    if tags is not None and (not isinstance(tags, list) or any(not isinstance(t, str) for t in tags)):
+        errors.append(f'{label}: "tags" must be a list of text')
+
+    non_lists = [key for key in fields if isinstance(fields[key], list) and key not in LIST_KEYS]
+    for key in non_lists:
+        errors.append(
+            f'{label}: "{key}" is written as a list, and a feature note only '
+            f"allows lists for {', '.join(LIST_KEYS)}"
+        )
+
     return errors
 
 
-def validate(path: str) -> list[str]:
+def validate(root: str) -> list[str]:
     """Returns the list of errors found. Empty means valid."""
-    errors: list[str] = []
+    features, load_errors = features_io.load_features(root)
+    errors: list[str] = list(load_errors)
 
-    try:
-        with open(path, encoding="utf-8") as handle:
-            data = json.load(handle)
-    except FileNotFoundError:
-        return [f"{path} does not exist"]
-    except json.JSONDecodeError as exc:
-        return [f"{path} is not valid JSON: {exc}"]
-
-    if not isinstance(data, dict):
-        return [f"{path} must contain an object at the root"]
-
-    for key in ("project", "rules", "features"):
-        if key not in data:
-            errors.append(f'The required "{key}" key is missing')
-
-    errors.extend(_validate_rules(data.get("rules", {})))
-
-    features = data.get("features")
-    if features is None:
+    features_dir = os.path.join(root, features_io.FEATURE_DIR)
+    if not os.path.isdir(features_dir):
+        errors.append(
+            "features/ does not exist yet: the scope lives in one note per "
+            "feature (features/F-<id>_<name>.md)"
+        )
         return errors
-    if not isinstance(features, list):
-        return errors + ['"features" must be an array']
+
+    non_notes = [
+        name for name in sorted(os.listdir(features_dir))
+        if name.endswith(".md") and not name.startswith("_") and not FEATURE_FILE_RE.match(name)
+    ]
+    for name in non_notes:
+        errors.append(
+            f"features/{name}: the file name does not follow F-<id>_<name>.md "
+            f"(an underscore-prefixed file is a template note, not a feature)"
+        )
 
     seen_ids: set = set()
     seen_names: set = set()
-    for index, feature in enumerate(features):
-        errors.extend(_validate_feature(feature, index, seen_ids, seen_names))
+    for feature in features:
+        errors.extend(_validate_note(feature, seen_ids, seen_names))
 
-    in_progress = [f for f in features if isinstance(f, dict) and f.get("status") == "in_progress"]
+    in_progress = [f for f in features if f.get("status") == "in_progress"]
     if len(in_progress) > 1:
         names = ", ".join(str(f.get("name", f.get("id"))) for f in in_progress)
         errors.append(f"There are {len(in_progress)} features in_progress (max 1): {names}")
@@ -281,12 +289,11 @@ def validate(path: str) -> list[str]:
     # require_tests_to_close, made executable: closing a feature without a single
     # test is not "verified", it is "nobody looked". The verifier runs them; here
     # we only check that they exist.
-    root = os.path.dirname(os.path.abspath(path))
-    closed = [f for f in features if isinstance(f, dict) and f.get("status") == "done"]
+    closed = [f for f in features if f.get("status") == "done"]
     if closed and not has_tests(root):
         errors.append(
             f"there are {len(closed)} feature(s) done and not a single test in tests/: "
-            f"a feature does not close without proof (rules.require_tests_to_close)"
+            f"a feature does not close without proof (require_tests_to_close)"
         )
 
     # Nobody approves their own work: closing demands both reports of the cycle.
@@ -295,23 +302,24 @@ def validate(path: str) -> list[str]:
         if not isinstance(name, str) or not name:
             continue
         for problem in closing_reports(root, name):
-            errors.append(f"feature {feature.get('id')} {name} is done and {problem}")
+            errors.append(f"feature {feature['id']} {name} is done and {problem}")
 
     return errors
 
 
 def main(argv: list[str]) -> int:
-    path = argv[1] if len(argv) > 1 else "feature_list.json"
-    errors = validate(path)
+    root = os.path.abspath(argv[1] if len(argv) > 1 else ".")
+    errors = validate(root)
 
     if errors:
         for error in errors:
             print(f"[FAIL]  {error}")
         return 1
 
-    with open(path, encoding="utf-8") as handle:
-        features = json.load(handle)["features"]
-    print(f"[OK]    {path} valid ({len(features)} features)")
+    import features_io
+
+    features, _ = features_io.load_features(root)
+    print(f"[OK]    features valid ({len(features)} features)")
 
     queue = work_order(features)
     if queue:

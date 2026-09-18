@@ -14,16 +14,16 @@
    is not configured, there is nothing to implement yet: report what is missing
    and stop.
 2. Read `progress/current.md` to understand what state the last session left.
-3. Read `feature_list.json` and pick **one** task with status `pending`. Do not
-   work on more than one at a time. `draft` ones are **not worked on**: they are
-   requirements the human has not approved yet. If there are only `draft` ones,
-   there is nothing to implement — say so and stop.
+3. Read the feature notes in `features/` and pick **one** task with status
+   `pending`. Do not work on more than one at a time. `draft` ones are **not
+   worked on**: they are requirements the human has not approved yet. If there
+   are only `draft` ones, there is nothing to implement — say so and stop.
 
 ## 2. Map of the repository
 
 | File / folder                      | What it holds                                             | When to read it |
 |------------------------------------|-----------------------------------------------------------|-----------------|
-| `feature_list.json`                | The task list with status (draft / pending / in_progress / done / blocked) and priority | Always, at the start |
+| `features/`                       | The task list: one note per feature (`features/F-<id>_<name>.md`) with status in the front matter (draft / pending / in_progress / done / blocked) and priority | Always, at the start |
 | `specs/`                           | The requirements in SDD format, one per file. The source the features come from | Before implementing, and whenever the scope is unclear |
 | `progress/current.md`              | State of the current session                              | Always, at the start |
 | `progress/history.md`              | Append-only log of previous sessions                      | If you need historical context |
@@ -37,7 +37,7 @@
 | `reset.ps1` / `reset.sh`           | Returns the folder to the template to start another project | When one project ends and the next begins, and **a human runs it**: it is on the `deny` list |
 | `scripts/validate_project_setup.py` | Checks the project is configured (blocking)              | The verifier calls it; by hand if you are unsure what is missing |
 | `scripts/validate_requirements.py` | Checks nobody is working on an unapproved requirement (blocking) | The verifier calls it; by hand if traceability is unclear |
-| `schema/feature_list.schema.json`  | The exact shape of a feature                              | If you are unsure about the scope's structure |
+| `features/_template.md`           | The exact shape of a feature note                          | If you are unsure about the scope's structure |
 | `.claude/agents/`                  | Subagent definitions (analyst, leader, implementer, reviewer) | If you are orchestrating work |
 | `.claude/commands/`                | The cycle's slash commands (`/requirements`, `/approve`, `/approve-all`, `/next-feature`, `/close-session`, `/harness-check`) | To trigger the cycle without writing the prompt |
 | `scripts/demo_orchestration.py`    | Demo of the Leader-Worker pattern with results on disk    | To understand the anti-broken-telephone rule |
@@ -65,7 +65,7 @@
 ## 4. How to pick a task
 
 ```
-1. Open feature_list.json
+1. Read the features in features/               (features/F-<id>_<name>.md)
 2. Filter by status == "pending"     (draft = unapproved requirement: ignored)
 3. If none is left, stop: there is no approved work
 4. Sort by priority: critical > high > medium > low
@@ -78,17 +78,18 @@ plan in `progress/current.md`; the `leader` only moves it to `done`, and only
 after an `APPROVED`. If you are unsure which one is next, do not work it out by
 eye: the verifier prints it in section 4.
 
-The order is set by `rules.work_order` in `feature_list.json`. Each feature
-inherits its priority from its requirement, so if the ordering looks wrong, the
-thing to discuss is the requirement — not the feature.
+The order is decided in the code, not in a file the scope can edit: `pending`
+first, sorted by priority, then by `id`. Each feature inherits its priority
+from its requirement, so if the ordering looks wrong, the thing to discuss is
+the requirement — not the feature.
 
 ## 5. Closing the session (lifecycle)
 
 Before finishing:
 
 1. Run the verifier — everything green.
-2. If the task is finished and approved: set `status: "done"` in
-   `feature_list.json`.
+2. If the task is finished and approved: set `status: done` in the feature's
+   note (`features/F-<id>_<name>.md`).
 3. Move the summary from `progress/current.md` to the end of
    `progress/history.md`.
 4. Empty `progress/current.md`, leaving only the template.

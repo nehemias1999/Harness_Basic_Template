@@ -7,8 +7,8 @@ updated: <YYYY-MM-DD>
 
 # Alcance del proyecto
 
-`project` y `description` son los datos que antes vivían en
-`feature_list.json`. `scripts/instantiate.py` (bootstrap) los rellena al crear
+`project` y `description` son los datos del proyecto.
+`scripts/instantiate.py` (bootstrap) los rellena al crear
 el proyecto. Las reglas del harness (`one_feature_at_a_time`,
 `require_tests_to_close`, `work_order`, statuses válidos) son constantes del
 código, no configuración: no se eligen desde aquí.

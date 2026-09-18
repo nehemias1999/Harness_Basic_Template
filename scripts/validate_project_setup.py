@@ -8,7 +8,7 @@ Purpose
     essentials are in place.
 
 What it blocks (`[FAIL]`)
-    - `feature_list.json` still carrying the `project` placeholder.
+    - `features/_project.md` still carrying the `project` placeholder.
     - `docs/architecture.md` unfilled (`<...>` placeholders or the template note
       still there) **if there is already a feature outside `draft`**.
     - `README.md` with unreplaced placeholders.
@@ -24,8 +24,8 @@ Why the architecture only blocks sometimes
 
 What it only warns about (`[WARN]`)
     - `docs/architecture.md` still a draft while everything is in `draft`.
-    - `description` not filled in.
-    - `feature_list.json` with no features.
+    - `features/_project.md` with its `description` not filled in.
+    - `features/` with no feature notes yet.
     - `src/` with no modules yet.
 
 Special case
@@ -45,11 +45,13 @@ Exit codes
 """
 from __future__ import annotations
 
-import json
 import os
 import re
 import sys
 
+import features_io
+
+PROJECT_NOTE = "features/_project.md"
 PROJECT_PLACEHOLDER = "<YOUR_PROJECT>"
 DESCRIPTION_PLACEHOLDER = "<PROJECT_DESCRIPTION>"
 TEMPLATE_MARKER = "This file is a template"
@@ -78,30 +80,41 @@ def check(root: str) -> tuple[list[str], list[str], bool]:
     def path(*parts: str) -> str:
         return os.path.join(root, *parts)
 
-    # --- feature_list.json --------------------------------------------------
+    # --- features/_project.md ----------------------------------------------
     project_unset = False
     features_empty = False
     try:
-        data = json.loads(_read(path("feature_list.json")))
-    except (OSError, json.JSONDecodeError) as exc:
-        fails.append(f"Could not read feature_list.json: {exc}")
-        data = {}
+        content = _read(path(PROJECT_NOTE))
+    except OSError as exc:
+        fails.append(f"Could not read {PROJECT_NOTE}: {exc}")
+        content = ""
 
-    project = str(data.get("project", "")).strip()
+    project = ""
+    description = ""
+    if content:
+        parsed = features_io.parse_frontmatter(content)
+        if parsed is None:
+            fails.append(f"{PROJECT_NOTE} has no front matter, or it is not closed with ---")
+        else:
+            fields, _repeated = parsed
+            project = str(fields.get("project", "")).strip()
+            description = str(fields.get("description", "")).strip()
+
     if not project or project == PROJECT_PLACEHOLDER:
         project_unset = True
         fails.append(
-            f'feature_list.json: "project" is still unset (it says "{project or ""}")'
+            f'{PROJECT_NOTE}: "project" is still unset (it says "{project or ""}")'
         )
     else:
-        description = str(data.get("description", "")).strip()
         if not description or description.startswith("<"):
-            warns.append('feature_list.json: "description" is not filled in')
+            warns.append(f'{PROJECT_NOTE}: "description" is not filled in')
 
-    features = data.get("features")
-    if isinstance(features, list) and not features:
+    features, _load_errors = features_io.load_features(root)
+    if not features:
         features_empty = True
-        warns.append("feature_list.json: no feature has been defined yet")
+        warns.append(
+            "features/: no feature has been defined yet (features/F-<id>_<name>.md)"
+        )
 
     # --- docs/architecture.md ----------------------------------------------
     architecture_unset = False
@@ -131,10 +144,7 @@ def check(root: str) -> tuple[list[str], list[str], bool]:
     # An unapproved architecture only blocks once there is real work: if
     # everything is still in `draft` we are in the analysis phase and the red
     # would be noise.
-    work_started = any(
-        isinstance(f, dict) and f.get("status") not in (None, "draft")
-        for f in (features if isinstance(features, list) else [])
-    )
+    work_started = any(f.get("status") not in (None, "draft") for f in features)
     if architecture_issues:
         if work_started:
             fails.extend(architecture_issues)

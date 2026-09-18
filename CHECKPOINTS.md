@@ -8,7 +8,8 @@
 
 - [ ] The harness base files exist. Section 2 of the verifier checks them:
       `AGENTS.md`, `CLAUDE.md`, `CHECKPOINTS.md`, `README.md`,
-      `feature_list.json`, `progress/current.md`, `progress/history.md`,
+      `features/_project.md`, `features/_template.md`, `progress/current.md`,
+      `progress/history.md`,
       `specs/_req_template.md` and the four `docs/`.
 - [ ] The 4 docs exist: `docs/architecture.md`, `docs/conventions.md`,
       `docs/verification.md`, `docs/scripts.md`.
@@ -21,13 +22,13 @@
 
 ## C2 — The state is coherent
 
-- [ ] At most one feature `in_progress` in `feature_list.json`.
+- [ ] At most one feature `in_progress` in the notes of `features/`.
 - [ ] Every `done` feature has associated tests that pass, and both of its
       reports (`impl_` and `review_`) with an `APPROVED` verdict. Section 4 of
       the verifier checks it.
 - [ ] `progress/current.md` is empty or describes the active session (it holds
       no leftovers from previous sessions).
-- [ ] `feature_list.json` no longer carries the `<YOUR_PROJECT>` placeholder.
+- [ ] `features/_project.md` no longer carries the `<YOUR_PROJECT>` placeholder.
 - [ ] No feature outside `draft` hangs off an unapproved requirement.
 - [ ] Every `approved` requirement has at least one feature referencing it, and
       every feature points at a `spec` that exists.

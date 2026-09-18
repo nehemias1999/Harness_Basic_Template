@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import io
-import json
 import os
 import shutil
 import subprocess
@@ -25,24 +24,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import instantiate  # noqa: E402
 
 
-TEMPLATE_FEATURE_LIST = {
-    "project": "<YOUR_PROJECT>",
-    "description": "<One line describing what the project does.>",
-    "rules": {"one_feature_at_a_time": True},
-    "features": [{"id": 1, "name": "inherited", "status": "done"}],
-}
-
-
 class InstantiateCase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.root = self._tmp.name
-        for folder in ("progress", "docs", "specs", "src"):
+        for folder in ("progress", "docs", "specs", "src", "features"):
             os.makedirs(os.path.join(self.root, folder))
         # AGENTS.md is part of what `refuse_foreign_root` recognises a harness
         # workspace by, so the fixture has to look like one.
         self.write("AGENTS.md", "# AGENTS\n")
-        self.write("feature_list.json", json.dumps(TEMPLATE_FEATURE_LIST, ensure_ascii=False))
+        self.write("features/_project.md", "---\nproject: <YOUR_PROJECT>\ndescription:\n---\n")
+        self.write("features/_template.md", "# Feature template\n")
         self.write("README.md", "# <YOUR_PROJECT>\n\n> <PROJECT_DESCRIPTION>\n")
         self.write("docs/architecture.md", "# Architecture of <YOUR_PROJECT>\n")
         self.write("progress/current.md", "# Current session\n\njunk from the last session\n")
@@ -88,10 +80,9 @@ class TestInstantiation(InstantiateCase):
         code, _output = self.run_it()
         self.assertEqual(code, 0)
 
-        data = json.loads(self.read("feature_list.json"))
-        self.assertEqual(data["project"], "my-project")
-        self.assertEqual(data["description"], "Does something.")
-        self.assertEqual(data["features"], [])
+        note = self.read("features/_project.md")
+        self.assertIn("project: my-project", note)
+        self.assertIn("Does something.", note)
         self.assertIn("my-project", self.read("README.md"))
         self.assertNotIn("<YOUR_PROJECT>", self.read("README.md"))
         self.assertIn("Feature in progress", self.read("progress/current.md"))
@@ -101,7 +92,7 @@ class TestInstantiation(InstantiateCase):
         self.assertIn("<PROJECT_DESCRIPTION>", self.read("README.md"))
 
     def test_a_template_file_is_missing(self) -> None:
-        os.remove(os.path.join(self.root, "progress", "history.md"))
+        os.remove(os.path.join(self.root, "features", "_template.md"))
         code, output = self.run_it()
         self.assertEqual(code, 1)
         self.assertIn("A template file is missing", output)
@@ -111,15 +102,16 @@ class TestDoNotDestroyALiveProject(InstantiateCase):
     """The guardrail that matters."""
 
     def test_it_refuses_if_it_already_has_a_name(self) -> None:
-        data = json.loads(self.read("feature_list.json"))
-        data["project"] = "live-project"
-        self.write("feature_list.json", json.dumps(data, ensure_ascii=False))
+        note = self.read("features/_project.md").replace(
+            "project: <YOUR_PROJECT>", "project: live-project"
+        )
+        self.write("features/_project.md", note)
 
         code, output = self.run_it()
         self.assertEqual(code, 1)
         self.assertIn("already an instantiated project", output)
         # And it touched nothing.
-        self.assertEqual(json.loads(self.read("feature_list.json"))["project"], "live-project")
+        self.assertIn("project: live-project", self.read("features/_project.md"))
 
     def test_it_refuses_if_there_are_requirements(self) -> None:
         self.write("specs/REQ-001_something.md", "---\nid: REQ-001\n---\n")
@@ -137,7 +129,7 @@ class TestDoNotDestroyALiveProject(InstantiateCase):
     def test_a_history_with_entries_is_not_overwritten_without_force(self) -> None:
         # Recorded sessions now refuse the whole instantiation, not just the
         # history file. A workspace with a month of sessions behind it is a live
-        # project however empty feature_list.json happens to look.
+        # project however empty features/_project.md happens to look.
         self.write(
             "progress/history.md",
             "# History\n\n---\n\n## 2026-01-01 — feature 1 something\n\n- Result: done\n",
@@ -169,13 +161,13 @@ class TestDoNotDestroyALiveProject(InstantiateCase):
         self.assertIn("source file(s) in src/", output)
         self.assertTrue(self.exists("src/app.py"))
 
-    def test_an_unreadable_feature_list_is_a_reason_to_stop_not_to_proceed(self) -> None:
+    def test_a_damaged_project_note_is_a_reason_to_stop_not_to_proceed(self) -> None:
         # The guard used to swallow the parse error into "no project", going
         # quiet exactly when the workspace was damaged.
-        self.write("feature_list.json", "{ this is not json")
+        self.write("features/_project.md", "# just a heading\n")
         code, output = self.run_it()
         self.assertEqual(code, 1)
-        self.assertIn("cannot be read", output)
+        self.assertIn("has no front matter", output)
 
 
 class TestForeignRoot(InstantiateCase):
@@ -201,13 +193,13 @@ class TestForeignRoot(InstantiateCase):
 
 class TestDryRun(InstantiateCase):
     def test_dry_run_writes_nothing(self) -> None:
-        before = self.read("feature_list.json")
+        before = self.read("features/_project.md")
         self.write("specs/REQ-001_something.md", "---\nid: REQ-001\n---\n")
 
         code, output = self.run_it(dry_run=True, force=True)
         self.assertEqual(code, 0)
         self.assertIn("simulated", output)
-        self.assertEqual(self.read("feature_list.json"), before)
+        self.assertEqual(self.read("features/_project.md"), before)
         self.assertTrue(self.exists("specs/REQ-001_something.md"))
 
 
