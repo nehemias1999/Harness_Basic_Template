@@ -22,7 +22,10 @@ and coordinate**, never to implement.
 ## Startup protocol
 
 1. Read `AGENTS.md` to get your bearings.
-2. Read the features in `features/` and `progress/current.md`.
+2. Read the features in `features/` and `progress/current.md`. The repository
+   is an Obsidian vault: the state lives in the front matter of those notes, and
+   `_Dashboard.md` is the human view. See `docs/obsidian.md` for how the vault
+   works and `docs/feature-notes.md` for the anatomy of a feature note.
 3. Run the verifier (`./init.ps1` on Windows, `./init.sh` on POSIX). If it
    fails, you stop and report.
 

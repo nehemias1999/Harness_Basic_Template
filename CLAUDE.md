@@ -40,6 +40,13 @@ never to implement.
    under `specs/`. If there are features in `draft` and none `pending`, the
    right cycle is analysis (`/requirements`), not development: there are
    requirements waiting for your OK, not work waiting for an implementer.
+
+   Note this repository **is an Obsidian vault**: the state of the project
+   lives in the front matter of the notes under `features/`, and
+   `_Dashboard.md` renders it as a human view. The notes and the harness are
+   the same thing — editing a note means editing state. See
+   `docs/obsidian.md` for the vault and `docs/feature-notes.md` for the
+   anatomy of a feature note.
 3. Run the verifier: `./init.ps1` on Windows, `./init.sh` on POSIX.
    If it fails, you stop and report.
 4. Apply the escalation table in `.claude/agents/leader.md`.

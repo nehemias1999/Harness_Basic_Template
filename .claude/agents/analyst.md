@@ -95,8 +95,9 @@ analysing never interrupts what is being built.
    **cannot be approved**, `scripts/validate_requirements.py` blocks it. An
    assumption you made up and did not mark is the worst mistake in this role.
 6. **Derive the features** as notes in `features/`
-   (`features/F-<id>_<name>.md`, copying `features/_template.md`). One
-   requirement can open several. For each one:
+    (`features/F-<id>_<name>.md`, copying `features/_template.md`; the
+    anatomy of a feature note is documented in `docs/feature-notes.md`). One
+    requirement can open several. For each one:
    - `id` = highest existing id (including `draft` and `done`) + 1;
    - `spec` = the wikilink of the REQ it comes from (`[[REQ-00N_name]]`);
    - `priority` = the requirement's. You may **lower** it if it is an accessory
