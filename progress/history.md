@@ -69,3 +69,21 @@ _No sessions recorded yet._
     workflow says stop here. The next real step is instantiating a project
     (`./bootstrap.sh --name <proyecto> --description <qué hace>`, human-run)
     and then running `/requirements`.
+
+## 2026-09-18 — Vault mirror completed (real loose end)
+
+- **Agent:** implementer (opencode)
+- **Result:** done
+- **Files touched:** `docs/obsidian.md`, `progress/`; mirror vault in
+  Google Drive refreshed with `AGENTS.md`, `CHECKPOINTS.md`, `README.md`,
+  `.claude/` and `CLAUDE.md`.
+- **Verification:** 215 tests OK; `validate_references.py` 20 docs OK.
+- **Notes:**
+  - The mirror refresh command in `docs/obsidian.md` was incomplete: it
+    omitted `AGENTS.md`, `CLAUDE.md`, `CHECKPOINTS.md`, `README.md` and
+    `.claude/`, so the mirror had drifted from the repo. Fixed to copy the
+    whole vault; mirror now faithful.
+  - `obsidian.json` verified: both vaults registered (Drive
+    `8e687730a51cd0f3`, real mirror folder `86ece00003b579bb`).
+  - No further work left: 0 features pending, harness fully verified, vault
+    mirror faithful, session memory closed cleanly (commit `c9f9fdc`).
