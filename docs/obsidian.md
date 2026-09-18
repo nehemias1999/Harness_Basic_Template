@@ -89,7 +89,8 @@ by copying the directories again from the repo root:
 
 ```bash
 VAULT=/path/to/GoogleDrive/Profesional/Obsidian/Harness_Basic_Template
-cp -r .obsidian features specs docs progress _Dashboard.md "$VAULT/"
+cp -r .obsidian features specs docs progress .claude \
+  AGENTS.md CLAUDE.md CHECKPOINTS.md README.md _Dashboard.md "$VAULT/"
 ```
 
 The mirror is a convenience for browsing, not something the harness reads.
