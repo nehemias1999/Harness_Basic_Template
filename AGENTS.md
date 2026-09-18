@@ -31,6 +31,8 @@
 | `docs/conventions.md`              | Style, naming and structure rules                         | Before writing code |
 | `docs/verification.md`             | How to verify your work actually works                    | Before declaring a task `done` |
 | `docs/scripts.md`                  | What each script does, its parameters and what to do when it fails | If a script fails or you do not know which one to use |
+| `docs/obsidian.md`                 | How the repository doubles as the Obsidian vault, and how to open it | Before opening the project in Obsidian, or if a note editor is involved |
+| `docs/feature-notes.md`            | The anatomy of a feature note, field by field | Before creating or editing a `features/F-<id>_<name>.md` note |
 | `CHECKPOINTS.md`                   | Objective criteria for "correct final state"              | To assess yourself |
 | `init.ps1` / `init.sh`             | The verifier (same behaviour on both platforms)           | On start-up and before closing |
 | `bootstrap.ps1` / `bootstrap.sh`   | Instantiates a new project from the template              | Only the first time, and **a human runs it**: it is on the `deny` list |

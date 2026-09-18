@@ -44,7 +44,10 @@
   muertas (id/name del front matter contra el nombre del archivo): `load_features`
   sobreescribe ambos desde el nombre de archivo. Quedan como dead code; el
   nombre de archivo es la autoridad. Se documentó en los tests.
-- **CP2 pendiente:** commit → push → PR → merge; luego CP3 y CP4.
+- **CP2 merged:** PR #23 (squash, sha `4cce237`, "feat(obsidian): feature notes
+  as the vault memory"); `main` local sincronizado; rama borrada; apunte de
+  memoria pusheado (`ef846d9`). Queda CP3 (narrativa agents/commands/CLAUDE.md)
+  y CP4 (narrativa en `docs/`, incl. `docs/obsidian.md` y `docs/feature-notes.md`).
 - **Vault Obsidian creado:** symlink imposible en el mount `fuse.rclone`
   (EIO: solo con `--vfs-links`). Decisión: vault **espejo** real creado en
   `/home/nsalazar/Documents/GoogleDrive/Profesional/Obsidian/Harness_Basic_Template`
