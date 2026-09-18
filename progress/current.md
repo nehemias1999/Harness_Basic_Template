@@ -45,6 +45,14 @@
   sobreescribe ambos desde el nombre de archivo. Quedan como dead code; el
   nombre de archivo es la autoridad. Se documentó en los tests.
 - **CP2 pendiente:** commit → push → PR → merge; luego CP3 y CP4.
+- **Vault Obsidian creado:** symlink imposible en el mount `fuse.rclone`
+  (EIO: solo con `--vfs-links`). Decisión: vault **espejo** real creado en
+  `/home/nsalazar/Documents/GoogleDrive/Profesional/Obsidian/Harness_Basic_Template`
+  con `.obsidian/`, `_Dashboard.md`, `features/`, `specs/`, `docs/`, `progress/`
+  (copiados del repo). Registrado en `~/.config/obsidian/obsidian.json` como
+  vault propio (id `86ece00003b579bb`); el vault principal (Drive) también lo
+  ve como subcarpeta. **El repo sigue siendo la fuente de verdad**; el espejo
+  puede quedar desactualizado — refrescar copiando los directorios.
 
 ## Next step
 
