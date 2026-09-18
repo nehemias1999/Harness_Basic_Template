@@ -14,7 +14,8 @@ Why it is in Python and not in each shell
 
 What it does
     1. Refuses if the repository is already an instantiated project (unless --force).
-    2. `feature_list.json`: writes project/description and empties `features`.
+    2. `features/_project.md`: writes project/description and deletes the feature
+       notes inherited from the previous project.
     3. Replaces `<YOUR_PROJECT>` and `<PROJECT_DESCRIPTION>` in README.md and in
        docs/{architecture,conventions,verification}.md.
     4. Resets `progress/current.md` and `progress/history.md` to their template.
@@ -36,7 +37,6 @@ Exit codes
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import shutil
@@ -44,12 +44,20 @@ import stat
 import subprocess
 import sys
 
+import features_io
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 PROJECT_PLACEHOLDER = "<YOUR_PROJECT>"
 DESCRIPTION_PLACEHOLDER = "<PROJECT_DESCRIPTION>"
 
-REQUIRED = ("feature_list.json", "README.md", "progress/current.md", "progress/history.md")
+REQUIRED = (
+    "features/_project.md",
+    "features/_template.md",
+    "README.md",
+    "progress/current.md",
+    "progress/history.md",
+)
 
 # An explicit list on purpose: `docs/scripts.md` and `CHECKPOINTS.md` *talk
 # about* the placeholders, so replacing them there would wreck their own
@@ -70,7 +78,7 @@ SPEC_RE = re.compile(r"^REQ-\d{3}_.*\.md$")
 # Before this check, `./reset.sh --name x --root ~/Documents` was a valid way to
 # empty ~/Documents — with no git there, no precondition objected and no backup
 # was taken.
-ROOT_FINGERPRINT = ("AGENTS.md", "feature_list.json", "progress")
+ROOT_FINGERPRINT = ("AGENTS.md", "features", "progress")
 
 # A real session entry in `progress/history.md`: `## 2026-09-14 — feature 3 x`.
 # This used to be `"## " in history.split("---", 2)[-1]`, which asked "is there a
@@ -222,16 +230,24 @@ class Instantiator:
     def already_a_project(self) -> list[str]:
         """Reasons why this does not look like the freshly copied template."""
         reasons: list[str] = []
+        project = ""
         try:
-            project = str(json.loads(self.read("feature_list.json")).get("project", "")).strip()
-        except (OSError, json.JSONDecodeError) as exc:
-            # Not swallowed into "no project". An unreadable feature_list.json
-            # is a damaged workspace, which is exactly when overwriting it is
-            # worst — the guard used to go quiet at the moment it mattered most.
-            reasons.append(f"feature_list.json cannot be read ({exc}), so this may be a live project")
-            project = ""
+            content = self.read("features/_project.md")
+        except OSError as exc:
+            # Not swallowed into "no project". An unreadable _project.md is a
+            # damaged workspace, which is exactly when overwriting it is worst —
+            # the guard used to go quiet at the moment it mattered most.
+            reasons.append(f"features/_project.md cannot be read ({exc}), so this may be a live project")
+        else:
+            parsed = features_io.parse_frontmatter(content)
+            if parsed is None:
+                reasons.append(
+                    "features/_project.md has no front matter, so this may be a live project"
+                )
+            else:
+                project = str(parsed[0].get("project", "")).strip()
         if project and project != PROJECT_PLACEHOLDER:
-            reasons.append(f"feature_list.json already belongs to project '{project}'")
+            reasons.append(f"features/_project.md already belongs to project '{project}'")
 
         specs = self.inherited_requirements()
         if specs:
@@ -273,17 +289,30 @@ class Instantiator:
             return []
         return sorted(f for f in os.listdir(spec_dir) if SPEC_RE.match(f))
 
-    def rewrite_feature_list(self) -> None:
-        data = json.loads(self.read("feature_list.json"))
-        data["project"] = self.args.name
+    def rewrite_project_note(self) -> None:
+        content = self.read("features/_project.md")
+        parsed = features_io.parse_frontmatter(content)
+        if parsed is None:
+            fail(
+                "features/_project.md has no front matter: fix it before instantiating"
+            )
+            return
+        fields, _repeated = parsed
+        fields["project"] = self.args.name
         if self.args.description:
-            data["description"] = self.args.description
-        data["features"] = []
-        self.write(
-            "feature_list.json",
-            json.dumps(data, indent=2, ensure_ascii=False) + "\n",
-        )
-        self.announce(f"feature_list.json -> project '{self.args.name}', 0 features")
+            fields["description"] = self.args.description
+
+        body = content.partition("\n---\n")[2]
+        if not self.args.dry_run:
+            features_io.write_note(self.root, "features/_project.md", fields, body)
+        self.announce(f"features/_project.md -> project '{self.args.name}'")
+
+        # The feature notes belong to the previous project. If they stay, they
+        # hang off specs that are about to be deleted, and the verifier is born
+        # red.
+        for name in features_io.feature_files(self.path("features")):
+            self.delete(os.path.join("features", name))
+            self.announce(f"features/{name} -> deleted")
 
     def replace_placeholders(self) -> None:
         for rel in WITH_PLACEHOLDERS:
@@ -501,7 +530,7 @@ class Instantiator:
         mode = " (dry run: nothing is written)" if self.args.dry_run else ""
         print(f"-- Instantiating project '{self.args.name}'{mode} ----------------------")
 
-        self.rewrite_feature_list()
+        self.rewrite_project_note()
         self.replace_placeholders()
         self.reset_progress()
         self.clean_reports()

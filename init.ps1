@@ -87,7 +87,8 @@ $BaseFiles = @(
     "CLAUDE.md",
     "CHECKPOINTS.md",
     "README.md",
-    "feature_list.json",
+    "features/_project.md",
+    "features/_template.md",
     "progress/current.md",
     "progress/history.md",
     "specs/_req_template.md",
@@ -121,18 +122,18 @@ if (Test-Path -LiteralPath "scripts/validate_project_setup.py" -PathType Leaf) {
 }
 
 Write-Host ""
-Write-Host "-- 4. Validating feature_list.json --------------------"
+Write-Host "-- 4. Validating features -----------------------------"
 
 # Same validation logic as init.sh: both delegate to the same module so the
 # scope rules do not drift apart between platforms.
-if (Test-Path -LiteralPath "scripts/validate_feature_list.py" -PathType Leaf) {
+if (Test-Path -LiteralPath "scripts/validate_features.py" -PathType Leaf) {
     # The output is captured and re-emitted with Write-Host so it stays in order
     # with the rest of the sections (native stdout does not go through the pipeline).
-    $validation = & $Py "scripts/validate_feature_list.py" "feature_list.json"
+    $validation = & $Py "scripts/validate_features.py" "."
     if ($LASTEXITCODE -ne 0) { $ExitCode = 1 }
     $validation | ForEach-Object { Write-Host $_ }
 } else {
-    Write-Fail "scripts/validate_feature_list.py is missing — cannot validate the scope"
+    Write-Fail "scripts/validate_features.py is missing — cannot validate the scope"
     $ExitCode = 1
 }
 

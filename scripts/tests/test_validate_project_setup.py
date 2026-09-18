@@ -9,7 +9,6 @@ quality criteria.
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
 import tempfile
@@ -45,45 +44,45 @@ ARCHITECTURE_WITH_HOLES = """# Architecture
 """
 
 
-def feature(status: str = "draft") -> dict:
-    return {
-        "id": 1,
-        "name": "a_feature",
-        "title": "A feature",
-        "description": "What it does.",
-        "spec": "specs/REQ-001_a_requirement.md",
-        "priority": "medium",
-        "acceptance": ["something verifiable"],
-        "status": status,
-    }
-
-
 class ProjectSetupCase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.root = self._tmp.name
         os.makedirs(os.path.join(self.root, "docs"))
         os.makedirs(os.path.join(self.root, "src"))
+        os.makedirs(os.path.join(self.root, "features"))
         self.write("README.md", "# my-project\n\n> Does something.\n")
         self.write("docs/architecture.md", ARCHITECTURE_READY)
-        self.features([])
+        self.project("my-project")
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
     def write(self, rel: str, content: str) -> None:
         path = os.path.join(self.root, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(content)
 
-    def features(self, features: list, project: str = "my-project") -> None:
-        payload = {
-            "project": project,
-            "description": "Does something.",
-            "rules": {},
-            "features": features,
-        }
-        self.write("feature_list.json", json.dumps(payload, ensure_ascii=False))
+    def project(self, name: str, desc: str = "Does something.") -> None:
+        self.write(
+            "features/_project.md",
+            f"---\nproject: {name}\ndescription: {desc}\n---\n",
+        )
+
+    def write_feature_note(self, status: str = "draft") -> None:
+        content = (
+            "---\n"
+            "title: A feature\n"
+            "description: What it does.\n"
+            'spec: "[[REQ-001_a_requirement]]"\n'
+            "priority: medium\n"
+            "acceptance:\n"
+            '  - "something verifiable"\n'
+            f"status: {status}\n"
+            "---\n"
+        )
+        self.write("features/F-001_a_feature.md", content)
 
     def check(self):
         return vps.check(self.root)
@@ -92,25 +91,25 @@ class ProjectSetupCase(unittest.TestCase):
 class TestConditionalArchitecture(ProjectSetupCase):
     def test_draft_with_everything_in_draft_only_warns(self) -> None:
         self.write("docs/architecture.md", ARCHITECTURE_DRAFT)
-        self.features([feature("draft")])
+        self.write_feature_note("draft")
         fails, warns, _ = self.check()
         self.assertEqual(fails, [])
         self.assertTrue(any("unapproved draft" in w for w in warns), warns)
 
     def test_draft_with_one_feature_outside_draft_blocks(self) -> None:
         self.write("docs/architecture.md", ARCHITECTURE_DRAFT)
-        self.features([feature("pending")])
+        self.write_feature_note("pending")
         fails, _warns, _ = self.check()
         self.assertTrue(any("unfilled template" in f for f in fails), fails)
 
     def test_placeholders_with_work_started_block(self) -> None:
         self.write("docs/architecture.md", ARCHITECTURE_WITH_HOLES)
-        self.features([feature("in_progress")])
+        self.write_feature_note("in_progress")
         fails, _warns, _ = self.check()
         self.assertTrue(any("placeholders" in f for f in fails), fails)
 
     def test_a_ready_architecture_says_nothing(self) -> None:
-        self.features([feature("done")])
+        self.write_feature_note("done")
         fails, warns, _ = self.check()
         self.assertEqual(fails, [])
         self.assertFalse([w for w in warns if "architecture" in w], warns)
@@ -118,7 +117,7 @@ class TestConditionalArchitecture(ProjectSetupCase):
 
 class TestProjectPlaceholders(ProjectSetupCase):
     def test_unset_project_blocks(self) -> None:
-        self.features([], project="<YOUR_PROJECT>")
+        self.project("<YOUR_PROJECT>")
         fails, _warns, _ = self.check()
         self.assertTrue(any('"project" is still unset' in f for f in fails), fails)
 
@@ -130,7 +129,7 @@ class TestProjectPlaceholders(ProjectSetupCase):
 
 class TestUninstantiatedTemplate(ProjectSetupCase):
     def test_the_pristine_repo_is_detected(self) -> None:
-        self.features([], project="<YOUR_PROJECT>")
+        self.project("<YOUR_PROJECT>")
         self.write("docs/architecture.md", ARCHITECTURE_DRAFT)
         self.write("README.md", "# <YOUR_PROJECT>\n\n> <PROJECT_DESCRIPTION>\n")
         _fails, _warns, pristine = self.check()

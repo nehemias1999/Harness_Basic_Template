@@ -8,8 +8,8 @@ Purpose
     because `AGENTS.md` mentions it, and does not find it, improvises.
 
 What it looks at
-    Backtick-quoted paths in the reference documents, and the `spec` field of
-    every feature in `feature_list.json`.
+    Backtick-quoted paths in the reference documents, and the `spec` pointer of
+    every feature note in `features/`.
 
     Only mentions **with a folder** count (`scripts/x.py`, `.claude/agents/y.md`).
     A bare name — `storage.py` in a naming-conventions table, `history.md` in the
@@ -31,10 +31,12 @@ Exit codes
 """
 from __future__ import annotations
 
-import json
 import os
 import re
 import sys
+
+import features_io
+from features_io import spec_basename
 
 DOCUMENTS = (
     "CLAUDE.md",
@@ -75,7 +77,6 @@ ROOT_FILES = frozenset({
     "CLAUDE.md",
     "CHECKPOINTS.md",
     "README.md",
-    "feature_list.json",
     "init.ps1",
     "init.sh",
     "bootstrap.ps1",
@@ -120,26 +121,25 @@ def check(root: str) -> list[str]:
                 continue
             failures.append(f"{document} mentions `{mention}`, which does not exist")
 
-    # Each feature's pointer to its requirement.
-    try:
-        data = json.loads(_read(os.path.join(root, "feature_list.json")))
-    except (OSError, json.JSONDecodeError) as exc:
-        # Reported, not swallowed. This used to `return failures`, so an
-        # unreadable feature_list.json printed "[OK] no dangling references"
-        # while half the check had silently not run — a validator that says
-        # nothing is wrong when it could not look is worse than no validator.
+    # Every feature note's pointer to its requirement. Format errors in the
+    # notes are section 4's job, but they also mean this check could not see the
+    # pointer: reported, not swallowed.
+    features, load_errors = features_io.load_features(root)
+    for error in load_errors:
         failures.append(
-            f"feature_list.json cannot be read ({exc}), so no feature -> spec "
-            f"pointer could be checked"
+            f"{error}, so no feature -> spec pointer could be checked"
         )
-        return failures
 
-    for feature in data.get("features") or []:
-        if not isinstance(feature, dict):
+    for feature in features:
+        basename = spec_basename(feature.get("spec"))
+        if basename is None:
             continue
-        spec = feature.get("spec")
-        if spec and not os.path.exists(os.path.join(root, spec)):
-            failures.append(f"feature {feature.get('id')} points at `{spec}`, which does not exist")
+        spec_path = f"specs/{basename}.md"
+        if not os.path.exists(os.path.join(root, spec_path)):
+            failures.append(
+                f"feature {feature.get('id')} {feature.get('name')} points at "
+                f"`{spec_path}`, which does not exist"
+            )
 
     return failures
 

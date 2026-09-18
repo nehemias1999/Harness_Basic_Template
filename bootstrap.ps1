@@ -6,7 +6,8 @@
     Fills in the template's placeholders and leaves the repository in a
     "project just started" state:
 
-      1. `feature_list.json` -> writes project/description and empties `features`.
+      1. `features/_project.md` -> writes project/description and deletes the
+         feature notes inherited from the previous project.
       2. Replaces `<YOUR_PROJECT>` and `<PROJECT_DESCRIPTION>` in README.md and
          in docs/architecture.md, conventions.md and verification.md.
       3. Resets `progress/current.md` and `progress/history.md` to their template.

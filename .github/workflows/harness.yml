@@ -52,7 +52,7 @@ jobs:
             echo "::error::the verifier fails, but not because it is uninstantiated"
             exit 1
           }
-          for section in "feature_list.json valid" "requirements ("; do
+          for section in "features valid" "requirements ("; do
             echo "$output" | grep -q "$section" || {
               echo "::error::missing the [OK] line for: $section"
               exit 1
@@ -61,7 +61,7 @@ jobs:
 
       - name: The validators, separately
         run: |
-          python scripts/validate_feature_list.py feature_list.json
+          python scripts/validate_features.py .
           python scripts/validate_requirements.py .
 
       - name: No dangling references
@@ -89,13 +89,13 @@ jobs:
           probe=$(mktemp -d)
           cp -r . "$probe/repo"
           python - "$probe/repo" <<'PY'
-          import json, sys
-          path = sys.argv[1] + "/feature_list.json"
+          import sys
+          path = sys.argv[1] + "/features/_project.md"
           with open(path, encoding="utf-8") as handle:
-              data = json.load(handle)
-          data["project"] = "ci-probe"
+              content = handle.read()
+          content = content.replace("project: <YOUR_PROJECT>", "project: ci-probe")
           with open(path, "w", encoding="utf-8") as handle:
-              json.dump(data, handle, indent=2)
+              handle.write(content)
           PY
           set +e
           (cd "$probe/repo" && echo '{}' | python scripts/harness_hook.py stop)
@@ -162,7 +162,7 @@ jobs:
       # `verifier_command()` the hook actually takes.
       - name: The validators, separately
         run: |
-          python scripts/validate_feature_list.py feature_list.json
+          python scripts/validate_features.py .
           python scripts/validate_requirements.py .
 
       - name: No dangling references

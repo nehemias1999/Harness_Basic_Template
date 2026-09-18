@@ -4,13 +4,16 @@ Signing touches four things at once and halfway through the repository is
 incoherent. What matters most to cover is that it does not sign when it must
 not, and that when it refuses **nothing has been written**.
 
+Features are written as notes (`features/F-<id>_<name>.md`) and read back
+through scripts/features_io.load_features, like the approver reads them.
+
     python -m unittest discover -s scripts/tests -v
 """
 from __future__ import annotations
 
 import io
-import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -19,6 +22,7 @@ from contextlib import redirect_stdout
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import approve  # noqa: E402
+import features_io  # noqa: E402
 import validate_requirements as vr  # noqa: E402
 
 
@@ -61,6 +65,27 @@ ARCHITECTURE_DRAFT = """# Architecture
 """
 
 
+def _quote(value: object) -> str:
+    text = str(value)
+    if re.fullmatch(r"[A-Za-z0-9_.\-]+", text):
+        return text
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _frontmatter(fields: dict) -> str:
+    """The note's front matter, in the exact shape the templates use."""
+    lines = ["---"]
+    for key, value in fields.items():
+        if isinstance(value, list):
+            lines.append(f"{key}:")
+            for item in value:
+                lines.append(f'  - "{_quote(item)}"')
+        else:
+            lines.append(f"{key}: {_quote(value)}")
+    lines.append("---")
+    return "\n".join(lines) + "\n"
+
+
 class ApproveCase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -81,12 +106,22 @@ class ApproveCase(unittest.TestCase):
 
     # -- helpers ---------------------------------------------------------
     def write(self, rel: str, content: str) -> None:
-        with open(os.path.join(self.root, rel), "w", encoding="utf-8", newline="\n") as handle:
+        path = os.path.join(self.root, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(content)
 
     def read(self, rel: str) -> str:
         with open(os.path.join(self.root, rel), encoding="utf-8") as handle:
             return handle.read()
+
+    def snapshot(self, rel: str) -> dict:
+        """Name -> content for every file under `rel`, for change detection."""
+        folder = os.path.join(self.root, rel)
+        return {
+            name: self.read(f"{rel}/{name}")
+            for name in sorted(os.listdir(folder))
+        }
 
     def spec(self, spec_id: str, name: str, status: str = "draft",
              questions: str = "- [x] **Q1:** answered") -> str:
@@ -101,13 +136,20 @@ class ApproveCase(unittest.TestCase):
         }
 
     def features(self, items: list[dict]) -> None:
-        self.write(
-            "feature_list.json",
-            json.dumps({"project": "p", "rules": {}, "features": items}, ensure_ascii=False),
-        )
+        features_dir = os.path.join(self.root, "features")
+        os.makedirs(features_dir, exist_ok=True)
+        for feat in items:
+            fields = dict(feat)
+            fid = int(fields["id"])
+            name = fields["name"]
+            rel = os.path.join(features_dir, f"F-{fid:03d}_{name}.md")
+            with open(rel, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(_frontmatter(fields) + "\n")
 
     def feature_statuses(self) -> list[str]:
-        return [f["status"] for f in json.loads(self.read("feature_list.json"))["features"]]
+        loaded, _ = features_io.load_features(self.root)
+        loaded.sort(key=lambda f: f["id"])
+        return [f["status"] for f in loaded]
 
     def run_approve(self, *targets: str, dry_run: bool = False) -> tuple[int, str]:
         output = io.StringIO()
@@ -248,13 +290,13 @@ class TestArchitecture(ApproveCase):
 class TestDryRun(ApproveCase):
     def test_dry_run_writes_nothing(self) -> None:
         spec_before = self.read("specs/REQ-001_req_one.md")
-        json_before = self.read("feature_list.json")
+        features_before = self.snapshot("features")
 
         code, output = self.run_approve("all", "architecture", dry_run=True)
         self.assertEqual(code, 0)
         self.assertIn("simulated", output)
         self.assertEqual(self.read("specs/REQ-001_req_one.md"), spec_before)
-        self.assertEqual(self.read("feature_list.json"), json_before)
+        self.assertEqual(self.snapshot("features"), features_before)
         self.assertIn(approve.TEMPLATE_MARKER, self.read("docs/architecture.md"))
 
 

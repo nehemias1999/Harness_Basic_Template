@@ -258,7 +258,7 @@ class TestPreToolUse(unittest.TestCase):
                 self.assertEqual(self._write(path)[0], 2)
 
     def test_it_lets_the_project_code_through(self) -> None:
-        for path in ("src/module.py", "tests/test_module.py", "feature_list.json",
+        for path in ("src/module.py", "tests/test_module.py", "features/F-001_a_feature.md",
                      "progress/current.md", "specs/REQ-001_x.md", "docs/architecture.md"):
             with self.subTest(path=path):
                 self.assertEqual(self._write(path)[0], hh.PASS)
@@ -479,7 +479,7 @@ class TestShellCorpus(unittest.TestCase):
         "ls -la .claude/agents/",
         # Running it.
         "python scripts/validate_requirements.py .",
-        "python scripts/validate_feature_list.py feature_list.json",
+        "python scripts/validate_features.py .",
         "python -m unittest discover -s scripts/tests -q",
         "python -m pytest scripts/tests -q",
         "./init.sh --quiet",

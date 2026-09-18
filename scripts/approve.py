@@ -38,7 +38,6 @@ from __future__ import annotations
 
 import argparse
 import datetime
-import json
 import os
 import re
 import subprocess
@@ -221,25 +220,27 @@ class Approver:
         return body[:cut] + f"\n{row}" + body[cut:]
 
     def promote_features(self, paths: list[str]) -> int:
-        json_path = os.path.join(self.root, "feature_list.json")
-        with open(json_path, encoding="utf-8") as handle:
-            data = json.load(handle)
+        import features_io
 
+        features, _errors = features_io.load_features(self.root)
         promoted = 0
-        for feature in data.get("features") or []:
-            if not isinstance(feature, dict):
+        for feature in features:
+            basename = vr.spec_basename(feature.get("spec"))
+            if basename is None or f"specs/{basename}.md" not in paths:
                 continue
-            if feature.get("spec") in paths and feature.get("status") == vr.DRAFT:
-                feature["status"] = "pending"
-                promoted += 1
-                ok(
-                    f"feature {feature.get('id')} {feature.get('name')} "
-                    f"-> pending{self.suffix()}"
-                )
+            if feature.get("status") != vr.DRAFT:
+                continue
 
-        if promoted and not self.dry_run:
-            with open(json_path, "w", encoding="utf-8", newline="\n") as handle:
-                handle.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+            fields = {key: value for key, value in feature.items() if not key.startswith("_")}
+            fields["status"] = "pending"
+            fields["updated"] = self.today
+            if not self.dry_run:
+                features_io.write_note(self.root, feature["_rel"], fields, feature["_body"])
+            promoted += 1
+            ok(
+                f"feature {feature.get('id')} {feature.get('name')} "
+                f"-> pending{self.suffix()}"
+            )
         return promoted
 
     def check_architecture(self) -> list[str]:

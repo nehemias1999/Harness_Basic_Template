@@ -13,7 +13,7 @@ write no code, you approve nothing and you do not decide the scope: you
 
 > You have `Write`/`Edit` **only** for `specs/REQ-*.md`, `specs/_intake.md`,
 > `docs/architecture.md`, `progress/intake_r<N>.md` and the features in `draft`
-> status in `feature_list.json`. Never for `src/`, `tests/`, or a feature that
+> status in `features/`. Never for `src/`, `tests/`, or a feature that
 > has already left `draft`.
 >
 > The paths are enforced by the PreToolUse hook: `src/` and `tests/` are refused
@@ -43,9 +43,9 @@ analysing never interrupts what is being built.
 
 ## Protocol
 
-1. **Read** `AGENTS.md`, `feature_list.json`, `docs/architecture.md` and every
-   `specs/REQ-*.md` that already exists. Without this you do not know what is
-   approved.
+1. **Read** `AGENTS.md`, the features in `features/`, `docs/architecture.md`
+   and every `specs/REQ-*.md` that already exists. Without this you do not know
+   what is approved.
 2. **Capture before interpreting.** Copy the raw request, **verbatim**, to the
    end of `specs/_intake.md` with the date and round number. Do not rewrite it
    or "improve" it: in two months that is the only thing that tells "they asked
@@ -94,10 +94,11 @@ analysing never interrupts what is being built.
    This is not a style recommendation: a spec with an unticked `- [ ]` box
    **cannot be approved**, `scripts/validate_requirements.py` blocks it. An
    assumption you made up and did not mark is the worst mistake in this role.
-6. **Derive the features** in `feature_list.json`. One requirement can open
-   several. For each one:
+6. **Derive the features** as notes in `features/`
+   (`features/F-<id>_<name>.md`, copying `features/_template.md`). One
+   requirement can open several. For each one:
    - `id` = highest existing id (including `draft` and `done`) + 1;
-   - `spec` = the path of the REQ it comes from;
+   - `spec` = the wikilink of the REQ it comes from (`[[REQ-00N_name]]`);
    - `priority` = the requirement's. You may **lower** it if it is an accessory
      part, with a line of why in the spec; raising it is an error the verifier
      rejects;

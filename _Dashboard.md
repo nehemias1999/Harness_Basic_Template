@@ -8,8 +8,8 @@ title: Panel de mando del proyecto
 
 > Este repositorio **es el vault** de Obsidian del proyecto. El estado vive en el
 > front matter de las notas de `features/`; el harness lo valida con
-> `./init.sh`. Cambia `status:` de una nota para actualizar el estado, igual que
-> antes se editaba `feature_list.json`. Ver `docs/obsidian.md`.
+> `./init.sh`. Cambia `status:` de una nota para actualizar el estado. Ver
+> `docs/obsidian.md`.
 
 ## Features por estado
 

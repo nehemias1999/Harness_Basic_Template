@@ -2,7 +2,7 @@
 description: Runs the full harness cycle on the next pending feature.
 ---
 
-Take the next `pending` feature from `feature_list.json` — the one with the
+Take the next `pending` feature from the notes in `features/` — the one with the
 **highest priority** (`critical` > `high` > `medium` > `low`) and, at equal
 priority, the lowest `id` — and run the full harness cycle as `leader`.
 
@@ -20,9 +20,10 @@ priority, the lowest `id` — and run the full harness cycle as `leader`.
    If `CHANGES_REQUESTED` → you relaunch the implementer passing it the **path**
    of the review, not its content.
 
-**Files it touches:** `feature_list.json` (the `status` field, and only to
-close: moving to `in_progress` is done by the implementer when it takes the
-feature), `progress/current.md`, `progress/history.md`,
+**Files it touches:** the chosen feature's note, `features/F-<id>_<name>.md`
+(its `status` field, and only to close: moving to `in_progress` is done by the
+implementer when it takes the feature), `progress/current.md`,
+`progress/history.md`,
 `progress/impl_<feature>.md`, `progress/review_<feature>.md`, and `src/` +
 `tests/` (through the implementer, never you directly).
 

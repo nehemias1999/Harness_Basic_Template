@@ -37,7 +37,6 @@ from __future__ import annotations
 
 import argparse
 import datetime
-import json
 import os
 import shutil
 import subprocess
@@ -46,6 +45,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import features_io  # noqa: E402
 import instantiate  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -226,16 +226,21 @@ class Resetter:
 
     def looks_like_the_harness(self, tree: str) -> bool:
         """The guard that stops a mistyped URL from emptying the folder."""
+        note = os.path.join(tree, "features/_project.md")
         try:
-            with open(os.path.join(tree, "feature_list.json"), encoding="utf-8") as handle:
-                project = json.load(handle).get("project", "")
-        except (OSError, json.JSONDecodeError):
+            with open(note, encoding="utf-8") as handle:
+                content = handle.read()
+        except OSError:
             return False
+        parsed = features_io.parse_frontmatter(content)
+        if parsed is None:
+            return False
+        project = str(parsed[0].get("project", "")).strip()
         if project != instantiate.PROJECT_PLACEHOLDER:
             return False
         return all(
             os.path.isfile(os.path.join(tree, f))
-            for f in ("scripts/instantiate.py", "init.sh", "AGENTS.md")
+            for f in ("features/_template.md", "scripts/instantiate.py", "init.sh", "AGENTS.md")
         )
 
     # -- 4. the safety net -------------------------------------------------

@@ -73,9 +73,9 @@ approved: scripts/validate_requirements.py blocks it.>
 
 ## 7. Derived features
 
-<Informative, for the human. The truth lives in feature_list.json: the pointer
-goes from the feature to the spec, not the other way round, and this table is
-NOT validated.>
+<Informative, for the human. The truth lives in the features/ notes: each
+feature's front matter points at this spec (`spec: "[[REQ-00N_name]]"`), not
+the other way round, and this table is NOT validated.>
 
 | feature `name` | id | priority | which criteria it covers |
 |----------------|----|----------|--------------------------|

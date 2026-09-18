@@ -4,7 +4,6 @@
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
 import tempfile
@@ -13,6 +12,18 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import validate_references as vref  # noqa: E402
+
+FEATURE_NOTE = (
+    "---\n"
+    "title: A feature\n"
+    "description: What it does.\n"
+    'spec: "[[REQ-001_x]]"\n'
+    "priority: medium\n"
+    "acceptance:\n"
+    '  - "something verifiable"\n'
+    "status: pending\n"
+    "---\n"
+)
 
 
 class ReferencesCase(unittest.TestCase):
@@ -23,7 +34,6 @@ class ReferencesCase(unittest.TestCase):
         os.makedirs(os.path.join(self.root, "scripts"))
         for document in vref.DOCUMENTS:
             self.write(document, "# empty\n")
-        self.write("feature_list.json", json.dumps({"features": []}))
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
@@ -72,31 +82,26 @@ class TestReferences(ReferencesCase):
         self.assertTrue(any("AGENTS.md" in f for f in failures), failures)
 
     def test_dangling_spec_pointer(self) -> None:
-        self.write(
-            "feature_list.json",
-            json.dumps({"features": [{"id": 1, "spec": "specs/REQ-001_x.md"}]}),
-        )
+        self.write("features/F-001_a_feature.md", FEATURE_NOTE)
         failures = self.check()
         self.assertTrue(any("REQ-001_x.md" in f for f in failures), failures)
+        self.assertTrue(any("points at" in f for f in failures), failures)
 
     def test_valid_spec_pointer(self) -> None:
         self.write("specs/REQ-001_x.md", "---\nid: REQ-001\n---\n")
-        self.write(
-            "feature_list.json",
-            json.dumps({"features": [{"id": 1, "spec": "specs/REQ-001_x.md"}]}),
-        )
+        self.write("features/F-001_a_feature.md", FEATURE_NOTE)
         self.assertEqual(self.check(), [])
 
-    def test_an_unreadable_feature_list_is_reported_not_swallowed(self) -> None:
+    def test_a_feature_note_without_front_matter_is_reported_not_swallowed(self) -> None:
         # This used to assert `== []`: the validator returned early and `main`
         # went on to print "[OK] no dangling references" while half the check had
         # not run. Not exploding is the right instinct; staying quiet about it is
         # not. A validator that reports success when it could not look is worse
         # than no validator, because someone trusts it.
-        self.write("feature_list.json", "{ broken")
+        self.write("features/F-001_broken.md", "# just a heading\n")
         failures = self.check()
         self.assertEqual(len(failures), 1)
-        self.assertIn("cannot be read", failures[0])
+        self.assertIn("has no front matter", failures[0])
 
 
 class TestTheRealRepo(unittest.TestCase):

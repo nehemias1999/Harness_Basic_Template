@@ -13,7 +13,7 @@ If you have just copied this template, go to [Quick start](#quick-start).
 
 | Pillar | How it shows up in this repo |
 |--------|------------------------------|
-| **1. The repository IS the system** | `AGENTS.md`, `init.ps1` / `init.sh`, `specs/`, `feature_list.json`, `progress/`, `docs/` |
+| **1. The repository IS the system** | `AGENTS.md`, `init.ps1` / `init.sh`, `specs/`, `features/`, `progress/`, `docs/` |
 | **2. Multi-agent orchestration** | `.claude/agents/analyst.md`, `leader.md`, `implementer.md`, `reviewer.md`, `.claude/commands/` |
 | **3. Supervision and improvement** | `CHECKPOINTS.md`, hooks in `.claude/settings.json`, `tests/` |
 
@@ -83,8 +83,9 @@ let you program on a project with no approved requirements, because then the
 reviewer would have nothing to judge the code against.
 
 If you prefer to write the requirements by hand, you can: copy
-`specs/_req_template.md`, fill in `docs/architecture.md` and add the features
-to `feature_list.json` yourself. The harness validates the same either way.
+`specs/_req_template.md`, fill in `docs/architecture.md` and add the feature
+notes to `features/` yourself (copying `features/_template.md`). The harness
+validates the same either way.
 
 ## Reusing the template for the next project
 
@@ -126,7 +127,7 @@ working copy, and that decision is yours. Details in **`docs/scripts.md`**.
 | `scripts/validate_project_setup.py` | `init.*` (and by hand) | blocks start-up if the project is not configured |
 | `scripts/validate_requirements.py` | `init.*` (and by hand) | blocks work on an unapproved requirement |
 | `scripts/approve.py` | `/approve`, `/approve-all` | when you sign requirements |
-| `scripts/validate_feature_list.py` | `init.*` (and by hand) | to check the scope |
+| `scripts/validate_features.py` | `init.*` (and by hand) | to check the scope |
 | `scripts/harness_hook.py` | `PostToolUse` and `Stop` hooks | automatic; they block with exit 2 |
 | `scripts/demo_orchestration.py` | human or agent | to see the anti-broken-telephone pattern in action |
 
@@ -215,7 +216,7 @@ The content lives on disk and stays versioned:
 | `progress/current.md` | leader | The session's live plan |
 | `progress/impl_<feature>.md` | implementer | Files touched + test output |
 | `progress/review_<feature>.md` | reviewer | Checklist against `docs/` and `CHECKPOINTS.md` |
-| `feature_list.json` | analyst → leader → implementer | `draft` → `pending` → `in_progress` → `done` |
+| `features/F-<id>_<name>.md` | analyst → leader → implementer | `draft` → `pending` → `in_progress` → `done` |
 | `progress/history.md` | leader | Append-only summary when the session closes |
 
 Open `progress/` in your editor while Claude works: each report appears as soon
@@ -230,7 +231,10 @@ as the subagent finishes. That is how you audit, step by step, who decided what.
 ├── CLAUDE.md                        # Forces the `leader` role in every session
 ├── CHECKPOINTS.md                   # Criteria for a "correct final state"
 ├── README.md                        # This file
-├── feature_list.json                # Executable backlog, derived from specs/
+├── features/                        # One note per feature (the Obsidian vault)
+│   ├── _project.md                  # The project's name and description
+│   ├── _template.md                 # Skeleton of a feature note
+│   └── F-001_<name>.md              # One feature (status: draft | pending | ...)
 ├── init.ps1                         # Verifier (Windows)
 ├── init.sh                          # Verifier (POSIX)
 ├── bootstrap.ps1                    # Instantiates a new project (Windows)
@@ -250,10 +254,9 @@ as the subagent finishes. That is how you audit, step by step, who decided what.
 │   ├── current.md                   # Active session (live state)
 │   ├── intake_r<N>.md               # Report of each analysis round
 │   └── history.md                   # Append-only log
-├── schema/
-│   └── feature_list.schema.json     # Shape of a feature
 ├── scripts/
-│   ├── validate_feature_list.py     # Validates the scope (init.ps1 and init.sh use it)
+│   ├── features_io.py               # Reads/writes the feature notes (vault layer)
+│   ├── validate_features.py         # Validates the scope (init.ps1 and init.sh use it)
 │   ├── validate_requirements.py     # Validates requirement -> feature (idem)
 │   ├── approve.py                   # Signs the requirements you name
 │   ├── validate_references.py       # Keeps the docs from pointing at missing files
@@ -281,7 +284,7 @@ as the subagent finishes. That is how you audit, step by step, who decided what.
 - **The agent asks instead of assuming**, and that is executable too: a
   requirement with unanswered open questions cannot be approved.
 - **One feature at a time**, enforced by the verifier (it rejects more than one
-  `in_progress` in `feature_list.json`), and by priority: critical first.
+  `in_progress` in the notes of `features/`), and by priority: critical first.
 - **State on disk**, not in the chat: `progress/current.md` and `history.md`
   survive restarts and blown context windows.
 - **A control nobody runs is not a control**: that is why the harness's own

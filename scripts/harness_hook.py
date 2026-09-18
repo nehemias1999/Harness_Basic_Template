@@ -231,7 +231,6 @@ def event_post_edit(tests_dir: str) -> int:
 PROTECTED_ZONE = (
     ".claude/",
     "scripts/",
-    "schema/",
     ".github/",
     "init.ps1",
     "init.sh",
@@ -258,10 +257,10 @@ MAINTENANCE_MARK = ".harness-maintenance"
 # model cannot. Absence of `agent_id` means the main thread — which CLAUDE.md
 # defines as the leader for this repository.
 AGENT_SCOPES = {
-    "leader": ("progress/", "feature_list.json"),
-    "implementer": ("src/", "tests/", "progress/", "feature_list.json"),
+    "leader": ("progress/", "features/"),
+    "implementer": ("src/", "tests/", "progress/", "features/"),
     "reviewer": ("progress/",),
-    "analyst": ("specs/", "docs/architecture.md", "progress/", "feature_list.json"),
+    "analyst": ("specs/", "docs/architecture.md", "progress/", "features/"),
 }
 
 # Working material: legitimate for the role that owns it, off-limits to the
@@ -271,8 +270,8 @@ SCOPED_ZONE = (
     "tests/",
     "specs/",
     "progress/",
+    "features/",
     "docs/architecture.md",
-    "feature_list.json",
 )
 
 # --- the shell matcher ------------------------------------------------------

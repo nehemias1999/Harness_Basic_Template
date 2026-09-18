@@ -15,8 +15,8 @@ result. This is a **read-only** review: do not fix anything, only report.
    - `[-]` does not apply yet → say why (for example, no code in the project yet)
 3. Check there are no **dangling references**, with the script that does it for
    you: `python scripts/validate_references.py .`. It walks the paths mentioned
-   in the reference documentation and the `spec` pointers in
-   `feature_list.json`.
+   in the reference documentation and the `spec` pointers in the feature notes
+   (`features/F-<id>_<name>.md`).
 4. Run the harness's own tests and report the result:
    `python -m unittest discover -s scripts/tests -v`. The verifier does not run
    them on purpose (see `docs/scripts.md`), so if nobody looks at them here,
