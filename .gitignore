@@ -8,6 +8,13 @@ __pycache__/
 harness_init.log
 progress/*.tmp
 
+# Obsidian (machine-specific state; the memory itself is versioned)
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache/
+.obsidian/layout.json
+.trash/
+
 # Temporary / OS
 *.tmp
 .DS_Store
