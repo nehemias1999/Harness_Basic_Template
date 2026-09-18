@@ -47,6 +47,8 @@ DOCUMENTS = (
     "docs/architecture.md",
     "docs/conventions.md",
     "docs/verification.md",
+    "docs/obsidian.md",
+    "docs/feature-notes.md",
     # The files subagents actually navigate by. They were missing, which is odd
     # for a check whose whole point is that agents improvise when the map lies.
     ".claude/agents/leader.md",
