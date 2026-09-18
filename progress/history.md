@@ -49,3 +49,23 @@ _No sessions recorded yet._
   - Next-session reminder: `validate_features._validate_note` has two dead
     checks (front-matter id/name vs file name); `load_features` overwrites
     them. Known, documented, left as dead code.
+
+## 2026-09-18 — Post-migration auto-audit (no approved work left)
+
+- **Agent:** implementer (opencode)
+- **Result:** done
+- **Files touched:** none (audit only; `progress/current.md` used as scratch).
+- **Verification:** verifier exit 1 solely for "NOT INSTANTIATED"; 215 harness
+  tests OK; validators green (`features valid`, `0 requirements`,
+  `20 documents checked`); init.sh/init.ps1 section parity 7/7 MATCH; working
+  tree clean; no `__pycache__`/`*.tmp` residue.
+- **Notes:**
+  - `CHECKPOINTS.md` is copied verbatim into every instantiated project
+    (`instantiate.py` excludes it from its rewrite lists): it must stay
+    unmarked in the template so each project's reviewer walks it fresh.
+  - The only leftover `<YOUR_PROJECT>` in `features/_project.md` is
+    intentional: it is what section 3 requires an instantiated project to fill.
+  - With 0 features pending, there is no approved work: the harness's own
+    workflow says stop here. The next real step is instantiating a project
+    (`./bootstrap.sh --name <proyecto> --description <qué hace>`, human-run)
+    and then running `/requirements`.
