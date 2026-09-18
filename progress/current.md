@@ -3,7 +3,7 @@
 > This file is emptied when each session closes and moved into `history.md`.
 > While you work, **keep it up to date in real time**, not at the end.
 
-- **Feature in progress:** CP2 — la memoria de features vive en el vault (notas `features/F-*`)
+- **Feature in progress:** CP3 + CP4 — narrativa del vault (cerradas y mergeadas)
 - **Started:** 2026-09-18
 - **Agent:** implementer (opencode)
 
@@ -56,12 +56,28 @@
   vault propio (id `86ece00003b579bb`); el vault principal (Drive) también lo
   ve como subcarpeta. **El repo sigue siendo la fuente de verdad**; el espejo
   puede quedar desactualizado — refrescar copiando los directorios.
+- **CP4 done:** `docs/obsidian.md` (el repo ES el vault: abrirlo, front matter
+  como API, autoridad del verifier, espejo de Drive) y `docs/feature-notes.md`
+  (anatomía campo a campo de la nota de feature + máquina de estados),
+  registradas en `DOCUMENTS` de `validate_references.py` (20 docs) y en el
+  mapa de AGENTS.md. PR #24 (squash, sha `ded90a9`), `main` sincronizado.
+- **CP3 done:** narrativa del vault en CLAUDE.md (protocolo de arranque: el
+  repo es un vault de Obsidian; refs a `docs/obsidian.md` y
+  `docs/feature-notes.md`), `leader.md` (misma referencia en su arranque) y
+  `analyst.md` (apunta a `docs/feature-notes.md` al derivar features).
+  PR #25 (squash, sha `64ece66`), `main` sincronizado; ramas borradas.
+- **E2E final (verde):** clon del repo en `/tmp/opencode/e2e_check`,
+  `bootstrap.sh --name e2e_check` → spec REQ-001 (draft) → `approve.py 1`
+  (firma + fingerprint `12712eb8db97abc5`, feature 1 → pending) →
+  `approve.py architecture` (placeholder llenado) → verifier "Environment
+  ready" → `hello.py` + `tests/test_greeting.py` (1 test OK) → feature 1
+  `status: done` + `progress/impl_greeting.md` + `progress/review_greeting.md`
+  (`**Verdict:** APPROVED`) → verifier final todo `[OK]`. Temp borrado.
+- **Espejo del vault refrescado** con los docs, CLAUDE.md, agentes y
+  `progress/current.md`.
 
 ## Next step
 
-- Commit de CP2: `git add` de los cambios, mensaje "feat(obsidian): project
-  scope as feature notes (migrate feature_list.json to features/)"; push con
-  credential helper one-off:
-  `git -c credential.helper='!f() { echo "username=nehemias1999"; echo "password=$GITHUB_PERSONAL_ACCESS_TOKEN"; }; f' push -u origin <branch>`.
-- PR vía GitHub MCP (branch `feat/obsidian-memory-cp2-...`), merge squash,
-  sync `main`. Luego CP3 y CP4, cada uno con PR + merge.
+- Commit de memoria con este estado y push a `main`; refrescar el espejo del
+  vault. El proyecto queda con el ciclo completo terminado: todos los
+  checkpoints CP1→CP4 mergeados (#22, #23, #24, #25).
